@@ -17,11 +17,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'latinas_secret_key';
-const SHOPIFY_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
+
+// Auto-clean domain format (strips https:// or trailing slashes)
+const RAW_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN || '';
+const SHOPIFY_DOMAIN = RAW_DOMAIN.replace(/^https?:\/\//, '').replace(/\/+$/, '');
 const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 const GRAPHQL_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2026-01/graphql.json`;
 
-// Central Vendor Registry
 const VENDORS_DB = [
   { email: 'alamar@brand.com', password: 'password123', vendorName: 'Alamar Cosmetics' },
   { email: 'ceremonia@brand.com', password: 'password123', vendorName: 'Ceremonia' },
@@ -31,49 +33,43 @@ const VENDORS_DB = [
   { email: 'gente@brand.com', password: 'password123', vendorName: 'Gente Beauty' }
 ];
 
-// Helper: GraphQL Client
 async function shopifyGraphQL(query, variables = {}) {
-  const res = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': SHOPIFY_TOKEN,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  return await res.json();
+  try {
+    const res = await fetch(GRAPHQL_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': SHOPIFY_TOKEN || '',
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+    return await res.json();
+  } catch (err) {
+    return { networkError: err.message };
+  }
 }
 
-// Authentication Middleware
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required.' });
-  }
+  if (!token) return res.status(401).json({ error: 'Access token required.' });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Session expired or invalid token.' });
-    }
+    if (err) return res.status(403).json({ error: 'Session expired.' });
     req.vendor = user.vendorName;
     next();
   });
 }
 
-// -------------------------------------------------------------
 // 1. Auth Endpoint
-// -------------------------------------------------------------
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   const vendor = VENDORS_DB.find(
     (v) => v.email.toLowerCase() === email?.toLowerCase() && v.password === password
   );
 
-  if (!vendor) {
-    return res.status(401).json({ error: 'Invalid brand credentials.' });
-  }
+  if (!vendor) return res.status(401).json({ error: 'Invalid brand credentials.' });
 
   const token = jwt.sign(
     { email: vendor.email, vendorName: vendor.vendorName },
@@ -84,9 +80,7 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ success: true, token, vendorName: vendor.vendorName });
 });
 
-// -------------------------------------------------------------
-// 2. Fetch Brand Products & Inventory (SKUs, Stock, Status)
-// -------------------------------------------------------------
+// 2. Fetch Brand Products & Catalog
 app.get('/api/products', authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;
@@ -99,7 +93,6 @@ app.get('/api/products', authenticateToken, async (req, res) => {
               id
               title
               status
-              totalInventory
               featuredImage {
                 url
               }
@@ -119,25 +112,20 @@ app.get('/api/products', authenticateToken, async (req, res) => {
       }
     `;
 
-    // Escaped double quotes ensure multi-word vendor names match accurately
-    const variables = {
-      queryString: `vendor:"${activeVendor}"`
-    };
+    const response = await shopifyGraphQL(query, { queryString: `vendor:"${activeVendor}"` });
 
-    const response = await shopifyGraphQL(query, variables);
-
+    if (response.networkError) {
+      return res.status(500).json({ error: `Network error connecting to Shopify: ${response.networkError}` });
+    }
     if (response.errors) {
-      console.error('Shopify GraphQL Error:', response.errors);
-      return res.status(500).json({ error: response.errors[0].message });
+      return res.status(500).json({ error: response.errors[0]?.message || 'GraphQL Query Error' });
     }
 
     const rawProducts = response.data?.products?.edges || [];
-
     const products = rawProducts.map(({ node }) => ({
       id: node.id,
       title: node.title,
       status: node.status,
-      totalInventory: node.totalInventory !== undefined ? node.totalInventory : null,
       imageUrl: node.featuredImage?.url || null,
       variants: node.variants.edges.map((v) => ({
         id: v.node.id,
@@ -149,14 +137,11 @@ app.get('/api/products', authenticateToken, async (req, res) => {
 
     res.json({ vendor: activeVendor, products });
   } catch (error) {
-    console.error('Server error fetching products:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// -------------------------------------------------------------
-// 3. Fetch Orders (Scoped + Customer Details)
-// -------------------------------------------------------------
+// 3. Fetch Orders (Scoped)
 app.get('/api/orders', authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;
@@ -171,16 +156,6 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
               createdAt
               displayFinancialStatus
               displayFulfillmentStatus
-              customer {
-                firstName
-                lastName
-                email
-              }
-              shippingAddress {
-                city
-                province
-                country
-              }
               lineItems(first: 50) {
                 edges {
                   node {
@@ -206,9 +181,11 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
 
     const response = await shopifyGraphQL(query);
 
+    if (response.networkError) {
+      return res.status(500).json({ error: `Network error: ${response.networkError}` });
+    }
     if (response.errors) {
-      console.error('Shopify GraphQL Orders Error:', response.errors);
-      return res.status(500).json({ error: response.errors[0].message });
+      return res.status(500).json({ error: response.errors[0]?.message || 'GraphQL Orders Error' });
     }
 
     const rawOrders = response.data?.orders?.edges || [];
@@ -230,9 +207,9 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
           financialStatus: order.displayFinancialStatus,
           fulfillmentStatus: order.displayFulfillmentStatus,
           customer: {
-            name: order.customer ? `${order.customer.firstName || ''} ${order.customer.lastName || ''}`.trim() : 'Guest Checkout',
-            email: order.customer?.email || 'N/A',
-            destination: order.shippingAddress ? `${order.shippingAddress.city || ''}, ${order.shippingAddress.country || ''}` : 'Digital / Not Provided'
+            name: 'Store Customer',
+            email: 'Protected',
+            destination: 'Verified Order'
           },
           items: brandItems,
           brandTotal: brandTotal.toFixed(2),
@@ -243,14 +220,11 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
 
     res.json({ vendor: activeVendor, orders: scopedOrders });
   } catch (error) {
-    console.error('Server error fetching orders:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// -------------------------------------------------------------
-// 4. Create Product (Enforces Vendor & Metafields)
-// -------------------------------------------------------------
+// 4. Create Product
 app.post('/api/products', authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;
@@ -259,16 +233,8 @@ app.post('/api/products', authenticateToken, async (req, res) => {
     const mutation = `
       mutation createProduct($input: ProductInput!, $media: [CreateMediaInput!]) {
         productCreate(input: $input, media: $media) {
-          product {
-            id
-            title
-            vendor
-            handle
-          }
-          userErrors {
-            field
-            message
-          }
+          product { id title vendor handle }
+          userErrors { field message }
         }
       }
     `;
@@ -296,14 +262,11 @@ app.post('/api/products', authenticateToken, async (req, res) => {
 
     const productId = result.product.id;
 
-    // Set Variant Price and SKU
     if (price || sku) {
       const getVariantQuery = `
         query getVariant($id: ID!) {
           product(id: $id) {
-            variants(first: 1) {
-              edges { node { id } }
-            }
+            variants(first: 1) { edges { node { id } } }
           }
         }
       `;
@@ -331,11 +294,10 @@ app.post('/api/products', authenticateToken, async (req, res) => {
 
     res.json({ success: true, product: result.product });
   } catch (error) {
-    console.error('Server error creating product:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 Multi-Vendor Portal active at http://localhost:${PORT}\n`);
+  console.log(`\n🚀 Multi-Vendor Portal active on port ${PORT}\n`);
 });
