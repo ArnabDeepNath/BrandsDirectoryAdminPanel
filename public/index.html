@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Partner Portal — Latinas in Beauty</title>
+    <style>
+      :root {
+        --primary: #da291c;
+        --dark: #0f172a;
+        --bg: #f8fafc;
+        --border: #e2e8f0;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--dark);
+        margin: 0;
+        padding: 0;
+      }
+
+      /* Login Box */
+      .login-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      .login-card {
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        width: 100%;
+        max-width: 400px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      }
+      .login-card h2 {
+        margin: 0 0 8px 0;
+        font-size: 24px;
+      }
+      .login-card p {
+        color: #64748b;
+        font-size: 14px;
+        margin: 0 0 25px 0;
+      }
+
+      /* Dashboard Layout */
+      .dashboard-container {
+        max-width: 1050px;
+        margin: 40px auto;
+        padding: 0 20px;
+        display: none;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: white;
+        padding: 25px 30px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        margin-bottom: 25px;
+      }
+      .brand-badge {
+        background: #fef2f2;
+        color: var(--primary);
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 14px;
+        border: 1px solid #fee2e2;
+      }
+
+      .nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .nav-tabs {
+        display: flex;
+        gap: 10px;
+      }
+      .nav-tabs button {
+        padding: 10px 20px;
+        background: white;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .nav-tabs button.active {
+        background: var(--dark);
+        color: white;
+        border-color: var(--dark);
+      }
+      .btn-logout {
+        background: transparent;
+        border: 1px solid #cbd5e1;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .btn-logout:hover {
+        background: #fee2e2;
+        color: var(--primary);
+        border-color: #fca5a5;
+      }
+
+      .panel {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+      .full-width {
+        grid-column: span 2;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        color: #64748b;
+      }
+      input,
+      textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        box-sizing: border-box;
+        font-size: 14px;
+      }
+      button.btn-submit {
+        background: var(--primary);
+        color: white;
+        border: none;
+        padding: 12px 28px;
+        border-radius: 6px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.btn-submit:hover {
+        opacity: 0.9;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+      }
+      th {
+        background: #f8fafc;
+        font-weight: 700;
+        color: #475569;
+      }
+      .status-tag {
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        background: #e2e8f0;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 1. LOGIN SCREEN -->
+    <div id="loginView" class="login-container">
+      <div class="login-card">
+        <h2>Brand Partner Login</h2>
+        <p>Enter your credentials to access your store catalog and orders.</p>
+
+        <form id="loginForm">
+          <div style="margin-bottom: 16px">
+            <label>Email Address</label>
+            <input
+              type="email"
+              id="loginEmail"
+              required
+              placeholder="alamar@brand.com"
+            />
+          </div>
+          <div style="margin-bottom: 22px">
+            <label>Password</label>
+            <input
+              type="password"
+              id="loginPassword"
+              required
+              placeholder="••••••••"
+            />
+          </div>
+          <button type="submit" class="btn-submit" style="width: 100%">
+            Sign In to Dashboard
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 2. VENDOR DASHBOARD -->
+    <div id="dashboardView" class="dashboard-container">
+      <div class="header">
+        <div>
+          <h2 style="margin: 0">Partner Portal</h2>
+          <p style="margin: 4px 0 0; color: #64748b; font-size: 14px">
+            Logged in as authorized brand representative
+          </p>
+        </div>
+        <span class="brand-badge" id="vendorNameBadge">Brand Name</span>
+      </div>
+
+      <div class="nav">
+        <div class="nav-tabs">
+          <button class="active" onclick="switchTab('orders')">
+            Brand Orders
+          </button>
+          <button onclick="switchTab('addProduct')">
+            + Submit New Product
+          </button>
+        </div>
+        <button class="btn-logout" onclick="logout()">Log Out</button>
+      </div>
+
+      <!-- Orders Tab -->
+      <div id="ordersPanel" class="panel">
+        <h3 style="margin-top: 0">Line-Item Order History</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Order #</th>
+              <th>Date</th>
+              <th>Items Ordered</th>
+              <th>Fulfillment</th>
+              <th>Brand Revenue</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTable">
+            <tr>
+              <td colspan="5">Loading orders...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Add Product Tab -->
+      <div id="addProductPanel" class="panel" style="display: none">
+        <h3 style="margin-top: 0">Submit Product to Shopify</h3>
+        <form id="productForm">
+          <div class="form-grid">
+            <div>
+              <label>Product Name</label>
+              <input
+                type="text"
+                id="title"
+                required
+                placeholder="e.g. Spanglish Pressed Glitter"
+              />
+            </div>
+            <div>
+              <label>Price ($ USD)</label>
+              <input
+                type="number"
+                step="0.01"
+                id="price"
+                required
+                placeholder="28.00"
+              />
+            </div>
+            <div class="full-width">
+              <label>Image URL</label>
+              <input
+                type="url"
+                id="imageUrl"
+                placeholder="https://cdn.example.com/item.jpg"
+              />
+            </div>
+            <div>
+              <label>Tagline 01 (Tag_01)</label>
+              <input
+                type="text"
+                id="tag01"
+                placeholder="e.g. Through Cosmetics"
+              />
+            </div>
+            <div>
+              <label>Tagline 02 (tag_02)</label>
+              <input
+                type="text"
+                id="tag02"
+                placeholder="e.g. Celebrating Culture"
+              />
+            </div>
+            <div class="full-width">
+              <label>Product Description</label>
+              <textarea
+                id="description"
+                rows="3"
+                placeholder="Enter product ingredients, benefits, details..."
+              ></textarea>
+            </div>
+          </div>
+          <button type="submit" class="btn-submit">
+            Push Product to Shopify
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const API_BASE = "/api";
+
+      // Check existing session
+      document.addEventListener("DOMContentLoaded", () => {
+        const token = localStorage.getItem("vendor_jwt");
+        const vendorName = localStorage.getItem("vendor_name");
+        if (token && vendorName) {
+          showDashboard(vendorName);
+        }
+      });
+
+      // Login Form
+      document
+        .getElementById("loginForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const email = document.getElementById("loginEmail").value;
+          const password = document.getElementById("loginPassword").value;
+
+          try {
+            const res = await fetch(`${API_BASE}/auth/login`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, password }),
+            });
+
+            const data = await res.json();
+            if (data.success) {
+              localStorage.setItem("vendor_jwt", data.token);
+              localStorage.setItem("vendor_name", data.vendorName);
+              showDashboard(data.vendorName);
+            } else {
+              alert(data.error || "Login failed.");
+            }
+          } catch (err) {
+            alert("Server connection error.");
+          }
+        });
+
+      function showDashboard(vendorName) {
+        document.getElementById("loginView").style.display = "none";
+        document.getElementById("dashboardView").style.display = "block";
+        document.getElementById("vendorNameBadge").textContent = vendorName;
+        fetchOrders();
+      }
+
+      function logout() {
+        localStorage.removeItem("vendor_jwt");
+        localStorage.removeItem("vendor_name");
+        document.getElementById("dashboardView").style.display = "none";
+        document.getElementById("loginView").style.display = "flex";
+        document.getElementById("loginForm").reset();
+      }
+
+      function switchTab(tab) {
+        const tabs = document.querySelectorAll(".nav-tabs button");
+        tabs.forEach((b) => b.classList.remove("active"));
+        if (tab === "orders") {
+          tabs[0].classList.add("active");
+          document.getElementById("ordersPanel").style.display = "block";
+          document.getElementById("addProductPanel").style.display = "none";
+          fetchOrders();
+        } else {
+          tabs[1].classList.add("active");
+          document.getElementById("ordersPanel").style.display = "none";
+          document.getElementById("addProductPanel").style.display = "block";
+        }
+      }
+
+      async function fetchOrders() {
+        const token = localStorage.getItem("vendor_jwt");
+        const tbody = document.getElementById("ordersTable");
+
+        try {
+          const res = await fetch(`${API_BASE}/orders`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (res.status === 401 || res.status === 403) {
+            return logout();
+          }
+
+          const data = await res.json();
+          tbody.innerHTML = "";
+
+          if (!data.orders || data.orders.length === 0) {
+            tbody.innerHTML =
+              '<tr><td colspan="5">No customer orders recorded for your brand yet.</td></tr>';
+            return;
+          }
+
+          data.orders.forEach((order) => {
+            const itemsList = order.items
+              .map((i) => `<strong>${i.quantity}x</strong> ${i.title}`)
+              .join("<br>");
+            tbody.innerHTML += `
+            <tr>
+              <td><strong>${order.orderNumber}</strong></td>
+              <td>${new Date(order.date).toLocaleDateString()}</td>
+              <td>${itemsList}</td>
+              <td><span class="status-tag">${order.fulfillmentStatus}</span></td>
+              <td><strong>${order.currency} $${order.brandTotal}</strong></td>
+            </tr>
+          `;
+          });
+        } catch (err) {
+          tbody.innerHTML =
+            '<tr><td colspan="5">Error loading orders.</td></tr>';
+        }
+      }
+
+      document
+        .getElementById("productForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const token = localStorage.getItem("vendor_jwt");
+          const payload = {
+            title: document.getElementById("title").value,
+            price: document.getElementById("price").value,
+            imageUrl: document.getElementById("imageUrl").value,
+            tag01: document.getElementById("tag01").value,
+            tag02: document.getElementById("tag02").value,
+            description: document.getElementById("description").value,
+          };
+
+          const res = await fetch(`${API_BASE}/products`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await res.json();
+          if (data.success) {
+            alert(
+              `Success! Product created under ${localStorage.getItem("vendor_name")} (ID: ${data.product.id})`,
+            );
+            document.getElementById("productForm").reset();
+            switchTab("orders");
+          } else {
+            alert("Error: " + JSON.stringify(data.errors));
+          }
+        });
+    </script>
+  </body>
+</html>
