@@ -110,7 +110,6 @@ app.get('/api/products', authenticateToken, async (req, res) => {
                     title
                     sku
                     price
-                    inventoryQuantity
                   }
                 }
               }
@@ -120,30 +119,37 @@ app.get('/api/products', authenticateToken, async (req, res) => {
       }
     `;
 
+    // Escaped double quotes ensure multi-word vendor names match accurately
     const variables = {
-      queryString: `vendor:'${activeVendor}'`
+      queryString: `vendor:"${activeVendor}"`
     };
 
     const response = await shopifyGraphQL(query, variables);
+
+    if (response.errors) {
+      console.error('Shopify GraphQL Error:', response.errors);
+      return res.status(500).json({ error: response.errors[0].message });
+    }
+
     const rawProducts = response.data?.products?.edges || [];
 
     const products = rawProducts.map(({ node }) => ({
       id: node.id,
       title: node.title,
       status: node.status,
-      totalInventory: node.totalInventory,
+      totalInventory: node.totalInventory !== undefined ? node.totalInventory : null,
       imageUrl: node.featuredImage?.url || null,
       variants: node.variants.edges.map((v) => ({
         id: v.node.id,
         variantTitle: v.node.title,
         sku: v.node.sku || 'N/A',
-        price: v.node.price,
-        inventoryQuantity: v.node.inventoryQuantity
+        price: v.node.price
       }))
     }));
 
     res.json({ vendor: activeVendor, products });
   } catch (error) {
+    console.error('Server error fetching products:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -199,6 +205,12 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
     `;
 
     const response = await shopifyGraphQL(query);
+
+    if (response.errors) {
+      console.error('Shopify GraphQL Orders Error:', response.errors);
+      return res.status(500).json({ error: response.errors[0].message });
+    }
+
     const rawOrders = response.data?.orders?.edges || [];
     const scopedOrders = [];
 
@@ -231,6 +243,7 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
 
     res.json({ vendor: activeVendor, orders: scopedOrders });
   } catch (error) {
+    console.error('Server error fetching orders:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -318,6 +331,7 @@ app.post('/api/products', authenticateToken, async (req, res) => {
 
     res.json({ success: true, product: result.product });
   } catch (error) {
+    console.error('Server error creating product:', error);
     res.status(500).json({ error: error.message });
   }
 });
