@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Partner Portal — Latinas in Beauty</title>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
       :root {
         --primary: #da291c;
@@ -12,6 +14,7 @@
         --border: #e2e8f0;
         --danger: #dc2626;
         --success: #16a34a;
+        --card-bg: #ffffff;
       }
       body {
         font-family:
@@ -50,7 +53,7 @@
       }
 
       .dashboard-container {
-        max-width: 1150px;
+        max-width: 1200px;
         margin: 40px auto;
         padding: 0 20px;
         display: none;
@@ -75,7 +78,7 @@
         border: 1px solid #fee2e2;
       }
 
-      /* Diagnostics Banner */
+      /* Diagnostic Banner */
       .status-banner {
         display: none;
         padding: 12px 16px;
@@ -115,6 +118,7 @@
         font-weight: 600;
         cursor: pointer;
         font-size: 14px;
+        transition: all 0.2s;
       }
       .nav-tabs button.active {
         background: var(--dark);
@@ -143,43 +147,55 @@
         border: 1px solid var(--border);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
       }
-      .form-grid {
+
+      /* KPI Cards */
+      .kpi-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 25px;
       }
-      .full-width {
-        grid-column: span 2;
+      .kpi-card {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
       }
-      label {
-        display: block;
-        font-size: 13px;
+      .kpi-title {
+        font-size: 12px;
         font-weight: 700;
-        margin-bottom: 6px;
-        text-transform: uppercase;
         color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
       }
-      input,
-      textarea {
-        width: 100%;
-        padding: 10px;
-        border: 1px solid #cbd5e1;
-        border-radius: 6px;
-        box-sizing: border-box;
-        font-size: 14px;
+      .kpi-value {
+        font-size: 26px;
+        font-weight: 800;
+        color: var(--dark);
+        margin-top: 8px;
       }
-      button.btn-submit {
-        background: var(--primary);
-        color: white;
-        border: none;
-        padding: 12px 28px;
-        border-radius: 6px;
-        font-weight: 700;
-        cursor: pointer;
+      .kpi-sub {
+        font-size: 12px;
+        color: #94a3b8;
+        margin-top: 4px;
       }
-      button.btn-submit:hover {
-        opacity: 0.9;
+
+      /* Charts Grid */
+      .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+        gap: 20px;
+      }
+      .chart-box {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+      }
+      .chart-box h4 {
+        margin: 0 0 15px 0;
+        font-size: 15px;
+        color: #334155;
       }
 
       table {
@@ -233,6 +249,18 @@
         font-family: monospace;
         font-size: 13px;
       }
+      button.btn-submit {
+        background: var(--primary);
+        color: white;
+        border: none;
+        padding: 12px 28px;
+        border-radius: 6px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.btn-submit:hover {
+        opacity: 0.9;
+      }
     </style>
   </head>
   <body>
@@ -240,25 +268,64 @@
     <div id="loginView" class="login-container">
       <div class="login-card">
         <h2>Brand Partner Login</h2>
-        <p>Enter your credentials to access your store catalog and orders.</p>
+        <p>
+          Enter your credentials to access your store catalog and performance
+          metrics.
+        </p>
 
         <form id="loginForm">
           <div style="margin-bottom: 16px">
-            <label>Email Address</label>
+            <label
+              style="
+                display: block;
+                font-size: 13px;
+                font-weight: 700;
+                margin-bottom: 6px;
+                text-transform: uppercase;
+                color: #64748b;
+              "
+              >Email Address</label
+            >
             <input
               type="email"
               id="loginEmail"
               required
               placeholder="alamar@brand.com"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                box-sizing: border-box;
+                font-size: 14px;
+              "
             />
           </div>
           <div style="margin-bottom: 22px">
-            <label>Password</label>
+            <label
+              style="
+                display: block;
+                font-size: 13px;
+                font-weight: 700;
+                margin-bottom: 6px;
+                text-transform: uppercase;
+                color: #64748b;
+              "
+              >Password</label
+            >
             <input
               type="password"
               id="loginPassword"
               required
               placeholder="••••••••"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                box-sizing: border-box;
+                font-size: 14px;
+              "
             />
           </div>
           <button type="submit" class="btn-submit" style="width: 100%">
@@ -285,19 +352,72 @@
 
       <div class="nav">
         <div class="nav-tabs">
-          <button class="active" onclick="switchTab('inventory')">
-            My Products & Inventory
+          <button class="active" onclick="switchTab('analytics')">
+            📊 Brand Analytics
           </button>
-          <button onclick="switchTab('orders')">Brand Orders</button>
-          <button onclick="switchTab('addProduct')">
-            + Submit New Product
+          <button onclick="switchTab('inventory')">
+            📦 Products & Catalog
           </button>
+          <button onclick="switchTab('orders')">🛍️ Orders</button>
         </div>
         <button class="btn-logout" onclick="logout()">Log Out</button>
       </div>
 
-      <!-- Tab 1: Inventory & Catalog -->
-      <div id="inventoryPanel" class="panel">
+      <!-- Tab 1: Analytics & Profit Insights -->
+      <div id="analyticsPanel" class="panel">
+        <h3 style="margin-top: 0; margin-bottom: 20px">
+          Brand Performance & Profit Analytics
+        </h3>
+
+        <!-- KPI Row -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-title">Total Brand Revenue</div>
+            <div class="kpi-value" id="kpiRevenue">$0.00</div>
+            <div class="kpi-sub">From scoped customer orders</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-title">Gross Profit (Est. 70%)</div>
+            <div class="kpi-value" id="kpiProfit" style="color: var(--success)">
+              $0.00
+            </div>
+            <div class="kpi-sub">Estimated net margin</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-title">Total Orders Fulfilled</div>
+            <div class="kpi-value" id="kpiOrders">0</div>
+            <div class="kpi-sub">Customer purchases</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-title">Active Catalog Items</div>
+            <div class="kpi-value" id="kpiProducts">0</div>
+            <div class="kpi-sub">Live Shopify listings</div>
+          </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+          <div class="chart-box">
+            <h4>Sales Revenue by Product</h4>
+            <canvas id="revenueChart" height="240"></canvas>
+          </div>
+          <div class="chart-box">
+            <h4>Catalog Status & Distribution</h4>
+            <canvas id="catalogChart" height="240"></canvas>
+          </div>
+          <div class="chart-box">
+            <h4>Units Sold per Item</h4>
+            <canvas id="volumeChart" height="240"></canvas>
+          </div>
+          <div class="chart-box">
+            <h4>Order Fulfillment Breakdown</h4>
+            <canvas id="fulfillmentChart" height="240"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Inventory & Catalog -->
+      <div id="inventoryPanel" class="panel" style="display: none">
         <h3 style="margin-top: 0">Brand Products & Stock Overview</h3>
         <table>
           <thead>
@@ -316,7 +436,7 @@
         </table>
       </div>
 
-      <!-- Tab 2: Orders -->
+      <!-- Tab 3: Orders -->
       <div id="ordersPanel" class="panel" style="display: none">
         <h3 style="margin-top: 0">Scoped Customer Orders</h3>
         <table>
@@ -336,77 +456,13 @@
           </tbody>
         </table>
       </div>
-
-      <!-- Tab 3: Add Product -->
-      <div id="addProductPanel" class="panel" style="display: none">
-        <h3 style="margin-top: 0">Submit Product to Shopify</h3>
-        <form id="productForm">
-          <div class="form-grid">
-            <div>
-              <label>Product Name</label>
-              <input
-                type="text"
-                id="title"
-                required
-                placeholder="e.g. Spanglish Pressed Glitter"
-              />
-            </div>
-            <div>
-              <label>SKU (Stock Keeping Unit)</label>
-              <input type="text" id="sku" placeholder="e.g. AC-SPN-001" />
-            </div>
-            <div>
-              <label>Price ($ USD)</label>
-              <input
-                type="number"
-                step="0.01"
-                id="price"
-                required
-                placeholder="28.00"
-              />
-            </div>
-            <div>
-              <label>Image Direct URL</label>
-              <input
-                type="url"
-                id="imageUrl"
-                placeholder="https://cdn.example.com/item.jpg"
-              />
-            </div>
-            <div>
-              <label>Tagline 01 (Tag_01)</label>
-              <input
-                type="text"
-                id="tag01"
-                placeholder="e.g. Through Cosmetics"
-              />
-            </div>
-            <div>
-              <label>Tagline 02 (tag_02)</label>
-              <input
-                type="text"
-                id="tag02"
-                placeholder="e.g. Celebrating Culture"
-              />
-            </div>
-            <div class="full-width">
-              <label>Product Description</label>
-              <textarea
-                id="description"
-                rows="3"
-                placeholder="Enter product ingredients, details..."
-              ></textarea>
-            </div>
-          </div>
-          <button type="submit" class="btn-submit">
-            Push Product to Shopify
-          </button>
-        </form>
-      </div>
     </div>
 
     <script>
       const API_BASE = "/api";
+      let chartsInstances = {};
+      let globalProducts = [];
+      let globalOrders = [];
 
       document.addEventListener("DOMContentLoaded", () => {
         const token = localStorage.getItem("vendor_jwt");
@@ -447,7 +503,7 @@
         document.getElementById("loginView").style.display = "none";
         document.getElementById("dashboardView").style.display = "block";
         document.getElementById("vendorNameBadge").textContent = vendorName;
-        fetchInventory();
+        loadAllData();
       }
 
       function logout() {
@@ -462,21 +518,22 @@
         const tabs = document.querySelectorAll(".nav-tabs button");
         tabs.forEach((b) => b.classList.remove("active"));
 
+        document.getElementById("analyticsPanel").style.display = "none";
         document.getElementById("inventoryPanel").style.display = "none";
         document.getElementById("ordersPanel").style.display = "none";
-        document.getElementById("addProductPanel").style.display = "none";
 
-        if (tab === "inventory") {
+        if (tab === "analytics") {
           tabs[0].classList.add("active");
+          document.getElementById("analyticsPanel").style.display = "block";
+          renderAnalytics();
+        } else if (tab === "inventory") {
+          tabs[1].classList.add("active");
           document.getElementById("inventoryPanel").style.display = "block";
           fetchInventory();
         } else if (tab === "orders") {
-          tabs[1].classList.add("active");
+          tabs[2].classList.add("active");
           document.getElementById("ordersPanel").style.display = "block";
           fetchOrders();
-        } else {
-          tabs[2].classList.add("active");
-          document.getElementById("addProductPanel").style.display = "block";
         }
       }
 
@@ -488,6 +545,11 @@
         }
         banner.className = isError ? "status-banner error" : "status-banner ok";
         banner.textContent = msg;
+      }
+
+      async function loadAllData() {
+        await Promise.all([fetchInventory(), fetchOrders()]);
+        renderAnalytics();
       }
 
       async function fetchInventory() {
@@ -515,18 +577,19 @@
             return;
           }
 
+          globalProducts = data.products || [];
           setStatusBanner(
-            `Connected to Shopify — Found ${data.products?.length || 0} products for "${data.vendor}".`,
+            `Connected to Shopify — Found ${globalProducts.length} products for "${data.vendor}".`,
             false,
           );
           tbody.innerHTML = "";
 
-          if (!data.products || data.products.length === 0) {
+          if (globalProducts.length === 0) {
             tbody.innerHTML = `<tr><td colspan="4">No products found for vendor exact match: <strong>"${data.vendor}"</strong>.</td></tr>`;
             return;
           }
 
-          data.products.forEach((p) => {
+          globalProducts.forEach((p) => {
             const mainVariant = p.variants[0] || {};
             const statusClass =
               p.status === "ACTIVE" ? "status-active" : "status-draft";
@@ -535,16 +598,16 @@
               : `<div class="product-thumb"></div>`;
 
             tbody.innerHTML += `
-            <tr>
-              <td>
-                ${imgTag}
-                <strong>${p.title}</strong>
-              </td>
-              <td><code>${mainVariant.sku || "N/A"}</code></td>
-              <td><span class="status-tag ${statusClass}">${p.status}</span></td>
-              <td><strong>$${mainVariant.price || "0.00"}</strong></td>
-            </tr>
-          `;
+              <tr>
+                <td>
+                  ${imgTag}
+                  <strong>${p.title}</strong>
+                </td>
+                <td><code>${mainVariant.sku || "N/A"}</code></td>
+                <td><span class="status-tag ${statusClass}">${p.status}</span></td>
+                <td><strong>$${mainVariant.price || "0.00"}</strong></td>
+              </tr>
+            `;
           });
         } catch (err) {
           setStatusBanner(`Network Error: ${err.message}`, true);
@@ -575,15 +638,16 @@
             return;
           }
 
+          globalOrders = data.orders || [];
           tbody.innerHTML = "";
 
-          if (!data.orders || data.orders.length === 0) {
+          if (globalOrders.length === 0) {
             tbody.innerHTML =
               '<tr><td colspan="5">No customer orders recorded for your brand yet.</td></tr>';
             return;
           }
 
-          data.orders.forEach((order) => {
+          globalOrders.forEach((order) => {
             const itemsList = order.items
               .map(
                 (i) =>
@@ -591,55 +655,191 @@
               )
               .join("<br>");
             tbody.innerHTML += `
-            <tr>
-              <td><strong>${order.orderNumber}</strong></td>
-              <td>${new Date(order.date).toLocaleDateString()}</td>
-              <td>${itemsList}</td>
-              <td><span class="status-tag status-draft">${order.fulfillmentStatus}</span></td>
-              <td><strong>${order.currency} $${order.brandTotal}</strong></td>
-            </tr>
-          `;
+              <tr>
+                <td><strong>${order.orderNumber}</strong></td>
+                <td>${new Date(order.date).toLocaleDateString()}</td>
+                <td>${itemsList}</td>
+                <td><span class="status-tag status-draft">${order.fulfillmentStatus}</span></td>
+                <td><strong>${order.currency} $${order.brandTotal}</strong></td>
+              </tr>
+            `;
           });
         } catch (err) {
           tbody.innerHTML = `<tr><td colspan="5" class="error-cell">Network failure: ${err.message}</td></tr>`;
         }
       }
 
-      document
-        .getElementById("productForm")
-        .addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const token = localStorage.getItem("vendor_jwt");
-          const payload = {
-            title: document.getElementById("title").value,
-            sku: document.getElementById("sku").value,
-            price: document.getElementById("price").value,
-            imageUrl: document.getElementById("imageUrl").value,
-            tag01: document.getElementById("tag01").value,
-            tag02: document.getElementById("tag02").value,
-            description: document.getElementById("description").value,
-          };
+      function renderAnalytics() {
+        // Compute Totals
+        const totalRev = globalOrders.reduce(
+          (sum, o) => sum + parseFloat(o.brandTotal || 0),
+          0,
+        );
+        const estProfit = totalRev * 0.7; // 70% estimated margin
+        const totalOrdersCount = globalOrders.length;
+        const totalProductsCount = globalProducts.length;
 
-          const res = await fetch(`${API_BASE}/products`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-          });
+        document.getElementById("kpiRevenue").textContent =
+          `$${totalRev.toFixed(2)}`;
+        document.getElementById("kpiProfit").textContent =
+          `$${estProfit.toFixed(2)}`;
+        document.getElementById("kpiOrders").textContent = totalOrdersCount;
+        document.getElementById("kpiProducts").textContent = totalProductsCount;
 
-          const data = await res.json();
-          if (data.success) {
-            alert(
-              `Success! Product created under ${localStorage.getItem("vendor_name")} (ID: ${data.product.id})`,
-            );
-            document.getElementById("productForm").reset();
-            switchTab("inventory");
-          } else {
-            alert("Error: " + JSON.stringify(data.errors || data.error));
-          }
+        // Cleanup previous chart instances to prevent canvas collision
+        [
+          "revenueChart",
+          "catalogChart",
+          "volumeChart",
+          "fulfillmentChart",
+        ].forEach((id) => {
+          if (chartsInstances[id]) chartsInstances[id].destroy();
         });
+
+        // 1. Revenue & Volume by Product Mapping
+        const itemSalesMap = {};
+        globalOrders.forEach((order) => {
+          order.items.forEach((item) => {
+            const price = parseFloat(
+              item.originalUnitPriceSet?.shopMoney?.amount || 0,
+            );
+            const qty = item.quantity || 1;
+            if (!itemSalesMap[item.title]) {
+              itemSalesMap[item.title] = { qty: 0, revenue: 0 };
+            }
+            itemSalesMap[item.title].qty += qty;
+            itemSalesMap[item.title].revenue += price * qty;
+          });
+        });
+
+        // Fallback demo labels if orders are empty
+        const productLabels =
+          Object.keys(itemSalesMap).length > 0
+            ? Object.keys(itemSalesMap)
+            : globalProducts.map((p) => p.title);
+
+        const revData =
+          Object.keys(itemSalesMap).length > 0
+            ? Object.values(itemSalesMap).map((v) => v.revenue)
+            : globalProducts.map(() => 0);
+
+        const qtyData =
+          Object.keys(itemSalesMap).length > 0
+            ? Object.values(itemSalesMap).map((v) => v.qty)
+            : globalProducts.map(() => 0);
+
+        // Chart 1: Revenue by Product
+        const ctxRev = document.getElementById("revenueChart").getContext("2d");
+        chartsInstances["revenueChart"] = new Chart(ctxRev, {
+          type: "bar",
+          data: {
+            labels: productLabels.map((l) =>
+              l.length > 18 ? l.substring(0, 18) + "..." : l,
+            ),
+            datasets: [
+              {
+                label: "Revenue ($ USD)",
+                data: revData,
+                backgroundColor: "#da291c",
+                borderRadius: 4,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } },
+          },
+        });
+
+        // Chart 2: Catalog Active vs Draft
+        const activeCount = globalProducts.filter(
+          (p) => p.status === "ACTIVE",
+        ).length;
+        const draftCount = globalProducts.filter(
+          (p) => p.status === "DRAFT",
+        ).length;
+        const ctxCatalog = document
+          .getElementById("catalogChart")
+          .getContext("2d");
+        chartsInstances["catalogChart"] = new Chart(ctxCatalog, {
+          type: "doughnut",
+          data: {
+            labels: ["Active Items", "Draft / Unlisted"],
+            datasets: [
+              {
+                data: [
+                  activeCount ||
+                    (globalProducts.length ? globalProducts.length : 1),
+                  draftCount,
+                ],
+                backgroundColor: ["#16a34a", "#94a3b8"],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { position: "bottom" } },
+          },
+        });
+
+        // Chart 3: Units Sold per Item
+        const ctxVolume = document
+          .getElementById("volumeChart")
+          .getContext("2d");
+        chartsInstances["volumeChart"] = new Chart(ctxVolume, {
+          type: "bar",
+          data: {
+            labels: productLabels.map((l) =>
+              l.length > 18 ? l.substring(0, 18) + "..." : l,
+            ),
+            datasets: [
+              {
+                label: "Units Sold",
+                data: qtyData,
+                backgroundColor: "#0f172a",
+                borderRadius: 4,
+              },
+            ],
+          },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } },
+          },
+        });
+
+        // Chart 4: Order Status Breakdown
+        const fulfilledCount = globalOrders.filter(
+          (o) => o.fulfillmentStatus === "FULFILLED",
+        ).length;
+        const unfulfilledCount = globalOrders.filter(
+          (o) => o.fulfillmentStatus !== "FULFILLED",
+        ).length;
+        const ctxFulfillment = document
+          .getElementById("fulfillmentChart")
+          .getContext("2d");
+        chartsInstances["fulfillmentChart"] = new Chart(ctxFulfillment, {
+          type: "pie",
+          data: {
+            labels: ["Fulfilled Orders", "Unfulfilled / In Progress"],
+            datasets: [
+              {
+                data: [
+                  fulfilledCount,
+                  unfulfilledCount || (globalOrders.length === 0 ? 1 : 0),
+                ],
+                backgroundColor: ["#2563eb", "#f59e0b"],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { position: "bottom" } },
+          },
+        });
+      }
     </script>
   </body>
 </html>
