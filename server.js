@@ -26,10 +26,13 @@ const SHOPIFY_DOMAIN = RAW_DOMAIN.replace(/^https?:\/\//, "").replace(
 );
 const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
 const SHOPIFY_CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
-let cachedAccessToken = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || null;
 
 const GRAPHQL_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2024-10/graphql.json`;
 const OAUTH_TOKEN_URL = `https://${SHOPIFY_DOMAIN}/admin/oauth/access_token`;
+
+// In-memory token cache
+let cachedToken = null;
+let tokenExpiresAt = 0;
 
 const VENDORS_DB = [
   {
@@ -64,37 +67,53 @@ const VENDORS_DB = [
   },
 ];
 
-// Automatically mint/refresh Shopify Access Token
-async function getValidAccessToken() {
-  if (cachedAccessToken) return cachedAccessToken;
-
-  if (!SHOPIFY_CLIENT_ID || !SHOPIFY_CLIENT_SECRET) {
-    throw new Error("Missing SHOPIFY_CLIENT_ID or SHOPIFY_CLIENT_SECRET");
+// Standalone Client Credentials Exchange Flow
+async function getShopifyAccessToken() {
+  const now = Date.now();
+  if (cachedToken && now < tokenExpiresAt - 60000) {
+    return cachedToken;
   }
 
-  const res = await fetch(OAUTH_TOKEN_URL, {
+  if (!SHOPIFY_CLIENT_ID || !SHOPIFY_CLIENT_SECRET) {
+    throw new Error(
+      "Missing SHOPIFY_CLIENT_ID or SHOPIFY_CLIENT_SECRET in Environment Variables.",
+    );
+  }
+
+  const response = await fetch(OAUTH_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
-      client_id: SHOPIFY_CLIENT_ID,
-      client_secret: SHOPIFY_CLIENT_SECRET,
+      client_id: SHOPIFY_CLIENT_ID.trim(),
+      client_secret: SHOPIFY_CLIENT_SECRET.trim(),
       grant_type: "client_credentials",
     }),
   });
 
-  const data = await res.json();
-  if (!res.ok || !data.access_token) {
-    throw new Error(`Failed to exchange token: ${JSON.stringify(data)}`);
+  const data = await response.json();
+
+  if (!response.ok || !data.access_token) {
+    const errorDetails =
+      data.error_description || data.errors || JSON.stringify(data);
+    throw new Error(
+      `Token exchange failed (${response.status}): ${errorDetails}`,
+    );
   }
 
-  cachedAccessToken = data.access_token;
-  return cachedAccessToken;
+  cachedToken = data.access_token;
+  // Set expiry (defaulting to 24 hours if expires_in is not provided)
+  tokenExpiresAt =
+    now + (data.expires_in ? data.expires_in * 1000 : 86400 * 1000);
+
+  return cachedToken;
 }
 
 // Helper: GraphQL Client
 async function shopifyGraphQL(query, variables = {}) {
   try {
-    const token = await getValidAccessToken();
+    const token = await getShopifyAccessToken();
 
     const res = await fetch(GRAPHQL_URL, {
       method: "POST",
@@ -141,7 +160,7 @@ function authenticateToken(req, res, next) {
   if (!token) return res.status(401).json({ error: "Access token required." });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: "Session expired." });
+    if (err) return res.status(401).json({ error: "Session expired." });
     req.vendor = user.vendorName;
     next();
   });
