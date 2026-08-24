@@ -1,9 +1,9 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import jwt from 'jsonwebtoken';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import jwt from "jsonwebtoken";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
@@ -13,75 +13,138 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, "public")));
 
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'latinas_secret_key';
+const JWT_SECRET = process.env.JWT_SECRET || "latinas_secret_key";
 
-// Auto-clean domain format (strips https:// or trailing slashes)
-const RAW_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN || '';
-const SHOPIFY_DOMAIN = RAW_DOMAIN.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+// Clean domain string safely
+const RAW_DOMAIN =
+  process.env.SHOPIFY_STORE_DOMAIN || "gh0dgm-bq.myshopify.com";
+const SHOPIFY_DOMAIN = RAW_DOMAIN.replace(/^https?:\/\//, "").replace(
+  /\/+$/,
+  "",
+);
+const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || "";
 const GRAPHQL_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2026-01/graphql.json`;
 
 const VENDORS_DB = [
-  { email: 'alamar@brand.com', password: 'password123', vendorName: 'Alamar Cosmetics' },
-  { email: 'ceremonia@brand.com', password: 'password123', vendorName: 'Ceremonia' },
-  { email: 'rare@brand.com', password: 'password123', vendorName: 'Rare Beauty' },
-  { email: 'fenty@brand.com', password: 'password123', vendorName: 'Fenty Beauty' },
-  { email: 'tresluce@brand.com', password: 'password123', vendorName: 'Treslúce Beauty' },
-  { email: 'gente@brand.com', password: 'password123', vendorName: 'Gente Beauty' }
+  {
+    email: "alamar@brand.com",
+    password: "password123",
+    vendorName: "Alamar Cosmetics",
+  },
+  {
+    email: "ceremonia@brand.com",
+    password: "password123",
+    vendorName: "Ceremonia",
+  },
+  {
+    email: "rare@brand.com",
+    password: "password123",
+    vendorName: "Rare Beauty",
+  },
+  {
+    email: "fenty@brand.com",
+    password: "password123",
+    vendorName: "Fenty Beauty",
+  },
+  {
+    email: "tresluce@brand.com",
+    password: "password123",
+    vendorName: "Treslúce Beauty",
+  },
+  {
+    email: "gente@brand.com",
+    password: "password123",
+    vendorName: "Gente Beauty",
+  },
 ];
 
+// Helper: GraphQL Client with direct status checking
 async function shopifyGraphQL(query, variables = {}) {
   try {
+    if (!SHOPIFY_TOKEN) {
+      return {
+        isError: true,
+        status: 500,
+        message:
+          "Missing SHOPIFY_ADMIN_ACCESS_TOKEN in Vercel Environment Variables.",
+      };
+    }
+
     const res = await fetch(GRAPHQL_URL, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': SHOPIFY_TOKEN || '',
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
       },
       body: JSON.stringify({ query, variables }),
     });
-    return await res.json();
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return {
+        isError: true,
+        status: res.status,
+        message:
+          typeof data.errors === "string"
+            ? data.errors
+            : JSON.stringify(data.errors || data),
+      };
+    }
+
+    if (data.errors) {
+      return {
+        isError: true,
+        status: 400,
+        message: Array.isArray(data.errors)
+          ? data.errors.map((e) => e.message).join(", ")
+          : JSON.stringify(data.errors),
+      };
+    }
+
+    return { isError: false, data: data.data };
   } catch (err) {
-    return { networkError: err.message };
+    return { isError: true, status: 500, message: err.message };
   }
 }
 
 function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
 
-  if (!token) return res.status(401).json({ error: 'Access token required.' });
+  if (!token) return res.status(401).json({ error: "Access token required." });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Session expired.' });
+    if (err) return res.status(403).json({ error: "Session expired." });
     req.vendor = user.vendorName;
     next();
   });
 }
 
-// 1. Auth Endpoint
-app.post('/api/auth/login', (req, res) => {
+// 1. Login Endpoint
+app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   const vendor = VENDORS_DB.find(
-    (v) => v.email.toLowerCase() === email?.toLowerCase() && v.password === password
+    (v) =>
+      v.email.toLowerCase() === email?.toLowerCase() && v.password === password,
   );
 
-  if (!vendor) return res.status(401).json({ error: 'Invalid brand credentials.' });
+  if (!vendor) return res.status(401).json({ error: "Invalid credentials." });
 
   const token = jwt.sign(
     { email: vendor.email, vendorName: vendor.vendorName },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: "7d" },
   );
 
   res.json({ success: true, token, vendorName: vendor.vendorName });
 });
 
-// 2. Fetch Brand Products & Catalog
-app.get('/api/products', authenticateToken, async (req, res) => {
+// 2. Fetch Brand Products
+app.get("/api/products", authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;
 
@@ -112,16 +175,15 @@ app.get('/api/products', authenticateToken, async (req, res) => {
       }
     `;
 
-    const response = await shopifyGraphQL(query, { queryString: `vendor:"${activeVendor}"` });
+    const result = await shopifyGraphQL(query, {
+      queryString: `vendor:"${activeVendor}"`,
+    });
 
-    if (response.networkError) {
-      return res.status(500).json({ error: `Network error connecting to Shopify: ${response.networkError}` });
-    }
-    if (response.errors) {
-      return res.status(500).json({ error: response.errors[0]?.message || 'GraphQL Query Error' });
+    if (result.isError) {
+      return res.status(500).json({ error: result.message });
     }
 
-    const rawProducts = response.data?.products?.edges || [];
+    const rawProducts = result.data?.products?.edges || [];
     const products = rawProducts.map(({ node }) => ({
       id: node.id,
       title: node.title,
@@ -130,9 +192,9 @@ app.get('/api/products', authenticateToken, async (req, res) => {
       variants: node.variants.edges.map((v) => ({
         id: v.node.id,
         variantTitle: v.node.title,
-        sku: v.node.sku || 'N/A',
-        price: v.node.price
-      }))
+        sku: v.node.sku || "N/A",
+        price: v.node.price,
+      })),
     }));
 
     res.json({ vendor: activeVendor, products });
@@ -141,8 +203,8 @@ app.get('/api/products', authenticateToken, async (req, res) => {
   }
 });
 
-// 3. Fetch Orders (Scoped)
-app.get('/api/orders', authenticateToken, async (req, res) => {
+// 3. Fetch Orders
+app.get("/api/orders", authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;
 
@@ -179,26 +241,30 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
       }
     `;
 
-    const response = await shopifyGraphQL(query);
+    const result = await shopifyGraphQL(query);
 
-    if (response.networkError) {
-      return res.status(500).json({ error: `Network error: ${response.networkError}` });
-    }
-    if (response.errors) {
-      return res.status(500).json({ error: response.errors[0]?.message || 'GraphQL Orders Error' });
+    if (result.isError) {
+      return res.status(500).json({ error: result.message });
     }
 
-    const rawOrders = response.data?.orders?.edges || [];
+    const rawOrders = result.data?.orders?.edges || [];
     const scopedOrders = [];
 
     rawOrders.forEach(({ node: order }) => {
       const brandItems = order.lineItems.edges
         .map((e) => e.node)
-        .filter((item) => item.vendor?.trim().toLowerCase() === activeVendor.toLowerCase());
+        .filter(
+          (item) =>
+            item.vendor?.trim().toLowerCase() === activeVendor.toLowerCase(),
+        );
 
       if (brandItems.length > 0) {
         const brandTotal = brandItems.reduce((acc, item) => {
-          return acc + parseFloat(item.originalUnitPriceSet.shopMoney.amount) * item.quantity;
+          return (
+            acc +
+            parseFloat(item.originalUnitPriceSet.shopMoney.amount) *
+              item.quantity
+          );
         }, 0);
 
         scopedOrders.push({
@@ -206,14 +272,11 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
           date: order.createdAt,
           financialStatus: order.displayFinancialStatus,
           fulfillmentStatus: order.displayFulfillmentStatus,
-          customer: {
-            name: 'Store Customer',
-            email: 'Protected',
-            destination: 'Verified Order'
-          },
           items: brandItems,
           brandTotal: brandTotal.toFixed(2),
-          currency: brandItems[0]?.originalUnitPriceSet?.shopMoney?.currencyCode || 'USD'
+          currency:
+            brandItems[0]?.originalUnitPriceSet?.shopMoney?.currencyCode ||
+            "USD",
         });
       }
     });
@@ -225,7 +288,7 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
 });
 
 // 4. Create Product
-app.post('/api/products', authenticateToken, async (req, res) => {
+app.post("/api/products", authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;
     const { title, price, sku, description, imageUrl, tag01, tag02 } = req.body;
@@ -242,62 +305,52 @@ app.post('/api/products', authenticateToken, async (req, res) => {
     const variables = {
       input: {
         title,
-        descriptionHtml: `<p>${description || ''}</p>`,
+        descriptionHtml: `<p>${description || ""}</p>`,
         vendor: activeVendor,
-        status: 'DRAFT',
+        status: "DRAFT",
         metafields: [
-          ...(tag01 ? [{ namespace: 'custom', key: 'Tag_01', type: 'single_line_text_field', value: tag01 }] : []),
-          ...(tag02 ? [{ namespace: 'custom', key: 'tag_02', type: 'single_line_text_field', value: tag02 }] : [])
-        ]
+          ...(tag01
+            ? [
+                {
+                  namespace: "custom",
+                  key: "Tag_01",
+                  type: "single_line_text_field",
+                  value: tag01,
+                },
+              ]
+            : []),
+          ...(tag02
+            ? [
+                {
+                  namespace: "custom",
+                  key: "tag_02",
+                  type: "single_line_text_field",
+                  value: tag02,
+                },
+              ]
+            : []),
+        ],
       },
-      media: imageUrl ? [{ originalSource: imageUrl, mediaContentType: 'IMAGE' }] : []
+      media: imageUrl
+        ? [{ originalSource: imageUrl, mediaContentType: "IMAGE" }]
+        : [],
     };
 
-    const response = await shopifyGraphQL(mutation, variables);
-    const result = response.data?.productCreate;
+    const result = await shopifyGraphQL(mutation, variables);
 
-    if (result?.userErrors?.length > 0) {
-      return res.status(400).json({ errors: result.userErrors });
+    if (result.isError) {
+      return res.status(500).json({ error: result.message });
     }
 
-    const productId = result.product.id;
-
-    if (price || sku) {
-      const getVariantQuery = `
-        query getVariant($id: ID!) {
-          product(id: $id) {
-            variants(first: 1) { edges { node { id } } }
-          }
-        }
-      `;
-      const varRes = await shopifyGraphQL(getVariantQuery, { id: productId });
-      const variantId = varRes.data?.product?.variants?.edges[0]?.node?.id;
-
-      if (variantId) {
-        const updatePriceMutation = `
-          mutation updateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-            productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-              userErrors { field message }
-            }
-          }
-        `;
-        await shopifyGraphQL(updatePriceMutation, {
-          productId,
-          variants: [{
-            id: variantId,
-            ...(price && { price: price.toString() }),
-            ...(sku && { sku: sku.toString() })
-          }]
-        });
-      }
+    const resData = result.data?.productCreate;
+    if (resData?.userErrors?.length > 0) {
+      return res.status(400).json({ errors: resData.userErrors });
     }
 
-    res.json({ success: true, product: result.product });
+    res.json({ success: true, product: resData.product });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🚀 Multi-Vendor Portal active on port ${PORT}\n`);
-});
+export default app;
