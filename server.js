@@ -18,15 +18,18 @@ app.use(express.static(path.join(__dirname, "public")));
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "latinas_secret_key";
 
-// Clean domain string safely
 const RAW_DOMAIN =
   process.env.SHOPIFY_STORE_DOMAIN || "gh0dgm-bq.myshopify.com";
 const SHOPIFY_DOMAIN = RAW_DOMAIN.replace(/^https?:\/\//, "").replace(
   /\/+$/,
   "",
 );
-const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || "";
-const GRAPHQL_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2026-01/graphql.json`;
+const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
+const SHOPIFY_CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
+let cachedAccessToken = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || null;
+
+const GRAPHQL_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2024-10/graphql.json`;
+const OAUTH_TOKEN_URL = `https://${SHOPIFY_DOMAIN}/admin/oauth/access_token`;
 
 const VENDORS_DB = [
   {
@@ -61,23 +64,43 @@ const VENDORS_DB = [
   },
 ];
 
-// Helper: GraphQL Client with direct status checking
+// Automatically mint/refresh Shopify Access Token
+async function getValidAccessToken() {
+  if (cachedAccessToken) return cachedAccessToken;
+
+  if (!SHOPIFY_CLIENT_ID || !SHOPIFY_CLIENT_SECRET) {
+    throw new Error("Missing SHOPIFY_CLIENT_ID or SHOPIFY_CLIENT_SECRET");
+  }
+
+  const res = await fetch(OAUTH_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: SHOPIFY_CLIENT_ID,
+      client_secret: SHOPIFY_CLIENT_SECRET,
+      grant_type: "client_credentials",
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || !data.access_token) {
+    throw new Error(`Failed to exchange token: ${JSON.stringify(data)}`);
+  }
+
+  cachedAccessToken = data.access_token;
+  return cachedAccessToken;
+}
+
+// Helper: GraphQL Client
 async function shopifyGraphQL(query, variables = {}) {
   try {
-    if (!SHOPIFY_TOKEN) {
-      return {
-        isError: true,
-        status: 500,
-        message:
-          "Missing SHOPIFY_ADMIN_ACCESS_TOKEN in Vercel Environment Variables.",
-      };
-    }
+    const token = await getValidAccessToken();
 
     const res = await fetch(GRAPHQL_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+        "X-Shopify-Access-Token": token,
       },
       body: JSON.stringify({ query, variables }),
     });
@@ -124,7 +147,7 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// 1. Login Endpoint
+// 1. Auth Endpoint
 app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   const vendor = VENDORS_DB.find(
@@ -132,7 +155,8 @@ app.post("/api/auth/login", (req, res) => {
       v.email.toLowerCase() === email?.toLowerCase() && v.password === password,
   );
 
-  if (!vendor) return res.status(401).json({ error: "Invalid credentials." });
+  if (!vendor)
+    return res.status(401).json({ error: "Invalid brand credentials." });
 
   const token = jwt.sign(
     { email: vendor.email, vendorName: vendor.vendorName },
@@ -143,7 +167,7 @@ app.post("/api/auth/login", (req, res) => {
   res.json({ success: true, token, vendorName: vendor.vendorName });
 });
 
-// 2. Fetch Brand Products
+// 2. Fetch Brand Products & Catalog
 app.get("/api/products", authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;
@@ -180,7 +204,7 @@ app.get("/api/products", authenticateToken, async (req, res) => {
     });
 
     if (result.isError) {
-      return res.status(500).json({ error: result.message });
+      return res.status(result.status || 500).json({ error: result.message });
     }
 
     const rawProducts = result.data?.products?.edges || [];
@@ -244,7 +268,7 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
     const result = await shopifyGraphQL(query);
 
     if (result.isError) {
-      return res.status(500).json({ error: result.message });
+      return res.status(result.status || 500).json({ error: result.message });
     }
 
     const rawOrders = result.data?.orders?.edges || [];
@@ -339,7 +363,7 @@ app.post("/api/products", authenticateToken, async (req, res) => {
     const result = await shopifyGraphQL(mutation, variables);
 
     if (result.isError) {
-      return res.status(500).json({ error: result.message });
+      return res.status(result.status || 500).json({ error: result.message });
     }
 
     const resData = result.data?.productCreate;
