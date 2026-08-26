@@ -18,73 +18,42 @@ app.use(express.static(path.join(__dirname, "public")));
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "latinas_secret_key";
 
-const RAW_DOMAIN =
-  process.env.SHOPIFY_STORE_DOMAIN || "gh0dgm-bq.myshopify.com";
-const SHOPIFY_DOMAIN = RAW_DOMAIN.replace(/^https?:\/\//, "").replace(
-  /\/+$/,
-  "",
-);
+const RAW_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN || "gh0dgm-bq.myshopify.com";
+const SHOPIFY_DOMAIN = RAW_DOMAIN.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
 const SHOPIFY_CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
+let cachedAccessToken = (process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim() || null;
+let tokenExpiresAt = 0;
 
 const GRAPHQL_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2024-10/graphql.json`;
 const OAUTH_TOKEN_URL = `https://${SHOPIFY_DOMAIN}/admin/oauth/access_token`;
 
-// In-memory token cache
-let cachedToken = null;
-let tokenExpiresAt = 0;
-
 const VENDORS_DB = [
-  {
-    email: "alamar@brand.com",
-    password: "password123",
-    vendorName: "Alamar Cosmetics",
-  },
-  {
-    email: "ceremonia@brand.com",
-    password: "password123",
-    vendorName: "Ceremonia",
-  },
-  {
-    email: "rare@brand.com",
-    password: "password123",
-    vendorName: "Rare Beauty",
-  },
-  {
-    email: "fenty@brand.com",
-    password: "password123",
-    vendorName: "Fenty Beauty",
-  },
-  {
-    email: "tresluce@brand.com",
-    password: "password123",
-    vendorName: "Treslúce Beauty",
-  },
-  {
-    email: "gente@brand.com",
-    password: "password123",
-    vendorName: "Gente Beauty",
-  },
+  { email: "alamar@brand.com", password: "password123", vendorName: "Alamar Cosmetics" },
+  { email: "ceremonia@brand.com", password: "password123", vendorName: "Ceremonia" },
+  { email: "rare@brand.com", password: "password123", vendorName: "Rare Beauty" },
+  { email: "fenty@brand.com", password: "password123", vendorName: "Fenty Beauty" },
+  { email: "tresluce@brand.com", password: "password123", vendorName: "Treslúce Beauty" },
+  { email: "gente@brand.com", password: "password123", vendorName: "Gente Beauty" },
 ];
 
-// Standalone Client Credentials Exchange Flow
-async function getShopifyAccessToken() {
+async function getValidAccessToken() {
+  if (process.env.SHOPIFY_ADMIN_ACCESS_TOKEN && process.env.SHOPIFY_ADMIN_ACCESS_TOKEN.trim()) {
+    return process.env.SHOPIFY_ADMIN_ACCESS_TOKEN.trim();
+  }
+
   const now = Date.now();
-  if (cachedToken && now < tokenExpiresAt - 60000) {
-    return cachedToken;
+  if (cachedAccessToken && now < tokenExpiresAt - 60000) {
+    return cachedAccessToken;
   }
 
   if (!SHOPIFY_CLIENT_ID || !SHOPIFY_CLIENT_SECRET) {
-    throw new Error(
-      "Missing SHOPIFY_CLIENT_ID or SHOPIFY_CLIENT_SECRET in Environment Variables.",
-    );
+    throw new Error("Missing SHOPIFY_CLIENT_ID or SHOPIFY_CLIENT_SECRET in Environment Variables.");
   }
 
-  const response = await fetch(OAUTH_TOKEN_URL, {
+  const res = await fetch(OAUTH_TOKEN_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       client_id: SHOPIFY_CLIENT_ID.trim(),
       client_secret: SHOPIFY_CLIENT_SECRET.trim(),
@@ -92,28 +61,19 @@ async function getShopifyAccessToken() {
     }),
   });
 
-  const data = await response.json();
-
-  if (!response.ok || !data.access_token) {
-    const errorDetails =
-      data.error_description || data.errors || JSON.stringify(data);
-    throw new Error(
-      `Token exchange failed (${response.status}): ${errorDetails}`,
-    );
+  const data = await res.json();
+  if (!res.ok || !data.access_token) {
+    throw new Error(`Token exchange failed: ${JSON.stringify(data)}`);
   }
 
-  cachedToken = data.access_token;
-  // Set expiry (defaulting to 24 hours if expires_in is not provided)
-  tokenExpiresAt =
-    now + (data.expires_in ? data.expires_in * 1000 : 86400 * 1000);
-
-  return cachedToken;
+  cachedAccessToken = data.access_token;
+  tokenExpiresAt = now + (data.expires_in ? data.expires_in * 1000 : 86400 * 1000);
+  return cachedAccessToken;
 }
 
-// Helper: GraphQL Client
 async function shopifyGraphQL(query, variables = {}) {
   try {
-    const token = await getShopifyAccessToken();
+    const token = await getValidAccessToken();
 
     const res = await fetch(GRAPHQL_URL, {
       method: "POST",
@@ -130,10 +90,7 @@ async function shopifyGraphQL(query, variables = {}) {
       return {
         isError: true,
         status: res.status,
-        message:
-          typeof data.errors === "string"
-            ? data.errors
-            : JSON.stringify(data.errors || data),
+        message: typeof data.errors === "string" ? data.errors : JSON.stringify(data.errors || data),
       };
     }
 
@@ -149,7 +106,7 @@ async function shopifyGraphQL(query, variables = {}) {
 
     return { isError: false, data: data.data };
   } catch (err) {
-    return { isError: true, status: 500, message: err.message };
+    return { isError: true, status: 502, message: err.message };
   }
 }
 
@@ -170,12 +127,10 @@ function authenticateToken(req, res, next) {
 app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   const vendor = VENDORS_DB.find(
-    (v) =>
-      v.email.toLowerCase() === email?.toLowerCase() && v.password === password,
+    (v) => v.email.toLowerCase() === email?.toLowerCase() && v.password === password,
   );
 
-  if (!vendor)
-    return res.status(401).json({ error: "Invalid brand credentials." });
+  if (!vendor) return res.status(401).json({ error: "Invalid brand credentials." });
 
   const token = jwt.sign(
     { email: vendor.email, vendorName: vendor.vendorName },
@@ -223,7 +178,7 @@ app.get("/api/products", authenticateToken, async (req, res) => {
     });
 
     if (result.isError) {
-      return res.status(result.status || 500).json({ error: result.message });
+      return res.status(result.status || 502).json({ error: result.message });
     }
 
     const rawProducts = result.data?.products?.edges || [];
@@ -242,11 +197,11 @@ app.get("/api/products", authenticateToken, async (req, res) => {
 
     res.json({ vendor: activeVendor, products });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(502).json({ error: error.message });
   }
 });
 
-// 3. Fetch Orders
+// 3. Fetch Orders (with Address & Fulfillment metadata)
 app.get("/api/orders", authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;
@@ -261,6 +216,20 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
               createdAt
               displayFinancialStatus
               displayFulfillmentStatus
+              shippingAddress {
+                name
+                address1
+                address2
+                city
+                province
+                zip
+                country
+              }
+              customer {
+                firstName
+                lastName
+                email
+              }
               lineItems(first: 50) {
                 edges {
                   node {
@@ -287,7 +256,7 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
     const result = await shopifyGraphQL(query);
 
     if (result.isError) {
-      return res.status(result.status || 500).json({ error: result.message });
+      return res.status(result.status || 502).json({ error: result.message });
     }
 
     const rawOrders = result.data?.orders?.edges || [];
@@ -296,103 +265,159 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
     rawOrders.forEach(({ node: order }) => {
       const brandItems = order.lineItems.edges
         .map((e) => e.node)
-        .filter(
-          (item) =>
-            item.vendor?.trim().toLowerCase() === activeVendor.toLowerCase(),
-        );
+        .filter((item) => item.vendor?.trim().toLowerCase() === activeVendor.toLowerCase());
 
       if (brandItems.length > 0) {
         const brandTotal = brandItems.reduce((acc, item) => {
-          return (
-            acc +
-            parseFloat(item.originalUnitPriceSet.shopMoney.amount) *
-              item.quantity
-          );
+          return acc + parseFloat(item.originalUnitPriceSet.shopMoney.amount) * item.quantity;
         }, 0);
 
         scopedOrders.push({
+          id: order.id,
           orderNumber: order.name,
           date: order.createdAt,
-          financialStatus: order.displayFinancialStatus,
-          fulfillmentStatus: order.displayFulfillmentStatus,
+          financialStatus: order.displayFinancialStatus || "PAID",
+          fulfillmentStatus: order.displayFulfillmentStatus || "UNFULFILLED",
+          customer: {
+            name: order.customer
+              ? `${order.customer.firstName || ""} ${order.customer.lastName || ""}`.trim()
+              : order.shippingAddress?.name || "Store Customer",
+            email: order.customer?.email || "N/A",
+          },
+          shippingAddress: order.shippingAddress
+            ? {
+                name: order.shippingAddress.name || "",
+                address1: order.shippingAddress.address1 || "",
+                address2: order.shippingAddress.address2 || "",
+                city: order.shippingAddress.city || "",
+                province: order.shippingAddress.province || "",
+                zip: order.shippingAddress.zip || "",
+                country: order.shippingAddress.country || "",
+              }
+            : null,
           items: brandItems,
           brandTotal: brandTotal.toFixed(2),
-          currency:
-            brandItems[0]?.originalUnitPriceSet?.shopMoney?.currencyCode ||
-            "USD",
+          currency: brandItems[0]?.originalUnitPriceSet?.shopMoney?.currencyCode || "USD",
         });
       }
     });
 
     res.json({ vendor: activeVendor, orders: scopedOrders });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(502).json({ error: error.message });
   }
 });
 
-// 4. Create Product
-app.post("/api/products", authenticateToken, async (req, res) => {
+// 4. Update Order Fulfillment Status (Complete vs. Pending)
+app.post("/api/orders/update-status", authenticateToken, async (req, res) => {
   try {
-    const activeVendor = req.vendor;
-    const { title, price, sku, description, imageUrl, tag01, tag02 } = req.body;
+    const { orderId, targetStatus } = req.body;
 
-    const mutation = `
-      mutation createProduct($input: ProductInput!, $media: [CreateMediaInput!]) {
-        productCreate(input: $input, media: $media) {
-          product { id title vendor handle }
-          userErrors { field message }
+    if (!orderId || !targetStatus) {
+      return res.status(400).json({ error: "Missing orderId or targetStatus" });
+    }
+
+    if (targetStatus === "FULFILLED") {
+      // Step A: Find Open Fulfillment Order
+      const foQuery = `
+        query getFulfillmentOrders($id: ID!) {
+          order(id: $id) {
+            fulfillmentOrders(first: 5) {
+              edges {
+                node {
+                  id
+                  status
+                }
+              }
+            }
+          }
         }
+      `;
+      const foRes = await shopifyGraphQL(foQuery, { id: orderId });
+      if (foRes.isError) return res.status(502).json({ error: foRes.message });
+
+      const foEdges = foRes.data?.order?.fulfillmentOrders?.edges || [];
+      const openFo = foEdges.find((e) => e.node.status === "OPEN" || e.node.status === "IN_PROGRESS");
+
+      if (!openFo) {
+        return res.status(400).json({ error: "No open fulfillment order available to complete." });
       }
-    `;
 
-    const variables = {
-      input: {
-        title,
-        descriptionHtml: `<p>${description || ""}</p>`,
-        vendor: activeVendor,
-        status: "DRAFT",
-        metafields: [
-          ...(tag01
-            ? [
-                {
-                  namespace: "custom",
-                  key: "Tag_01",
-                  type: "single_line_text_field",
-                  value: tag01,
-                },
-              ]
-            : []),
-          ...(tag02
-            ? [
-                {
-                  namespace: "custom",
-                  key: "tag_02",
-                  type: "single_line_text_field",
-                  value: tag02,
-                },
-              ]
-            : []),
-        ],
-      },
-      media: imageUrl
-        ? [{ originalSource: imageUrl, mediaContentType: "IMAGE" }]
-        : [],
-    };
+      // Step B: Fulfill
+      const fulfillMutation = `
+        mutation fulfillmentCreateV2($fulfillment: FulfillmentV2Input!) {
+          fulfillmentCreateV2(fulfillment: $fulfillment) {
+            fulfillment {
+              id
+              status
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+      const fulfillRes = await shopifyGraphQL(fulfillMutation, {
+        fulfillment: {
+          lineItemsByFulfillmentOrder: [{ fulfillmentOrderId: openFo.node.id }],
+          notifyCustomer: false,
+        },
+      });
 
-    const result = await shopifyGraphQL(mutation, variables);
+      if (fulfillRes.isError) return res.status(502).json({ error: fulfillRes.message });
+      if (fulfillRes.data?.fulfillmentCreateV2?.userErrors?.length > 0) {
+        return res.status(400).json({ error: fulfillRes.data.fulfillmentCreateV2.userErrors[0].message });
+      }
 
-    if (result.isError) {
-      return res.status(result.status || 500).json({ error: result.message });
+      return res.json({ success: true, status: "FULFILLED" });
+    } else if (targetStatus === "UNFULFILLED") {
+      // Step A: Find Active Fulfillment
+      const fQuery = `
+        query getFulfillments($id: ID!) {
+          order(id: $id) {
+            fulfillments(first: 5) {
+              id
+              status
+            }
+          }
+        }
+      `;
+      const fRes = await shopifyGraphQL(fQuery, { id: orderId });
+      if (fRes.isError) return res.status(502).json({ error: fRes.message });
+
+      const activeFulfillment = fRes.data?.order?.fulfillments?.find((f) => f.status === "SUCCESS");
+      if (!activeFulfillment) {
+        return res.status(400).json({ error: "No active fulfillment found to cancel." });
+      }
+
+      // Step B: Cancel Fulfillment
+      const cancelMutation = `
+        mutation fulfillmentCancel($id: ID!) {
+          fulfillmentCancel(id: $id) {
+            fulfillment {
+              id
+              status
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+      const cancelRes = await shopifyGraphQL(cancelMutation, { id: activeFulfillment.id });
+      if (cancelRes.isError) return res.status(502).json({ error: cancelRes.message });
+      if (cancelRes.data?.fulfillmentCancel?.userErrors?.length > 0) {
+        return res.status(400).json({ error: cancelRes.data.fulfillmentCancel.userErrors[0].message });
+      }
+
+      return res.json({ success: true, status: "UNFULFILLED" });
+    } else {
+      return res.status(400).json({ error: "Invalid targetStatus. Use FULFILLED or UNFULFILLED." });
     }
-
-    const resData = result.data?.productCreate;
-    if (resData?.userErrors?.length > 0) {
-      return res.status(400).json({ errors: resData.userErrors });
-    }
-
-    res.json({ success: true, product: resData.product });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(502).json({ error: error.message });
   }
 });
 
