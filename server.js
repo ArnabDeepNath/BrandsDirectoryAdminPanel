@@ -29,12 +29,44 @@ const GRAPHQL_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2024-10/graphql.json`;
 const OAUTH_TOKEN_URL = `https://${SHOPIFY_DOMAIN}/admin/oauth/access_token`;
 
 const VENDORS_DB = [
+  // Existing vendors
   { email: "alamar@brand.com", password: "password123", vendorName: "Alamar Cosmetics" },
   { email: "ceremonia@brand.com", password: "password123", vendorName: "Ceremonia" },
   { email: "rare@brand.com", password: "password123", vendorName: "Rare Beauty" },
   { email: "fenty@brand.com", password: "password123", vendorName: "Fenty Beauty" },
   { email: "tresluce@brand.com", password: "password123", vendorName: "Treslúce Beauty" },
   { email: "gente@brand.com", password: "password123", vendorName: "Gente Beauty" },
+
+  // Brands from Shopify collections (vendor name must match the Shopify "Vendor" field exactly)
+  { email: "valde@brand.com", password: "password123", vendorName: "VALDÉ BEAUTY" },
+  { email: "sarelly@brand.com", password: "password123", vendorName: "Sarelly" },
+  { email: "lib@brand.com", password: "password123", vendorName: "LIB" },
+  { email: "deziskin@brand.com", password: "password123", vendorName: "Dezi Skin" },
+  { email: "rokael@brand.com", password: "password123", vendorName: "Rokael Beauty" },
+  { email: "ortega@brand.com", password: "password123", vendorName: "ORTEGA Beauty" },
+  { email: "ecobrow@brand.com", password: "password123", vendorName: "Ecobrow" },
+  { email: "mitucorazon@brand.com", password: "password123", vendorName: "mi|tu corazón" },
+  { email: "dominique@brand.com", password: "password123", vendorName: "Dominique" },
+  { email: "kiolal@brand.com", password: "password123", vendorName: "Ki'olal Biocosmetics" },
+  { email: "pdl@brand.com", password: "password123", vendorName: "PDL Cosmetics" },
+  { email: "prados@brand.com", password: "password123", vendorName: "Prados Beauty" },
+  { email: "aloisia@brand.com", password: "password123", vendorName: "ALOISIA BEAUTY" },
+  { email: "eausovert@brand.com", password: "password123", vendorName: "EAUSO VERT" },
+  { email: "lasio@brand.com", password: "password123", vendorName: "Lasio Professional Hair Care" },
+  { email: "ocoa@brand.com", password: "password123", vendorName: "OCOA" },
+  { email: "shadesbyshan@brand.com", password: "password123", vendorName: "shades by Shan" },
+  { email: "youthdealer@brand.com", password: "password123", vendorName: "Youth Dealer™" },
+  { email: "beautyblender@brand.com", password: "password123", vendorName: "BEAUTYBLENDER" },
+  { email: "nopalera@brand.com", password: "password123", vendorName: "NOPALERA" },
+  { email: "isima@brand.com", password: "password123", vendorName: "ISIMA" },
+  { email: "thehairgeneration@brand.com", password: "password123", vendorName: "The Hair Generation" },
+  { email: "libertadvida@brand.com", password: "password123", vendorName: "Libertad Vida" },
+  { email: "aoramexico@brand.com", password: "password123", vendorName: "AORA MEXICO" },
+  { email: "soylatina@brand.com", password: "password123", vendorName: "Soy Latina" },
+  { email: "lendava@brand.com", password: "password123", vendorName: "LENDAVA SKINCARE" },
+  { email: "vitaparfum@brand.com", password: "password123", vendorName: "Vita Parfum" },
+  { email: "justblessedhair@brand.com", password: "password123", vendorName: "Just Blessed Hair" },
+  { email: "stace@brand.com", password: "password123", vendorName: "STACE Beauty" },
 ];
 
 async function getValidAccessToken() {
