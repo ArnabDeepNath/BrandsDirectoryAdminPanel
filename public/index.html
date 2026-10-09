@@ -1146,12 +1146,34 @@
           `;
         });
 
+        // Payout breakdown (with fallbacks for older cached payloads)
+        const shippingRate = parseFloat(order.shippingRate || 0);
+        const platformFee = parseFloat(
+          order.platformFee !== undefined ? order.platformFee : 10,
+        );
+        const netPayout =
+          order.netPayout !== undefined
+            ? parseFloat(order.netPayout)
+            : parseFloat(order.brandTotal) + shippingRate - platformFee;
+
         itemsHtml += `
           </tbody>
           <tfoot>
-            <tr style="background: #f8fafc; font-weight: bold;">
+            <tr style="background: #f8fafc;">
+              <td colspan="4" style="text-align: right;">Items Subtotal:</td>
+              <td>$${parseFloat(order.brandTotal).toFixed(2)}</td>
+            </tr>
+            <tr style="background: #f8fafc;">
+              <td colspan="4" style="text-align: right;">Shipping Rate:</td>
+              <td>$${shippingRate.toFixed(2)}</td>
+            </tr>
+            <tr style="background: #f8fafc;">
+              <td colspan="4" style="text-align: right;">Platform Fee:</td>
+              <td style="color: #dc2626;">-$${platformFee.toFixed(2)}</td>
+            </tr>
+            <tr style="background: #f8fafc; font-weight: bold; border-top: 2px solid #e2e8f0;">
               <td colspan="4" style="text-align: right;">Total Brand Payout:</td>
-              <td style="color: var(--primary); font-size: 15px;">${order.currency} $${order.brandTotal}</td>
+              <td style="color: var(--primary); font-size: 15px;">${order.currency} $${netPayout.toFixed(2)}</td>
             </tr>
           </tfoot>
         </table>`;

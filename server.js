@@ -262,6 +262,19 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
                 lastName
                 email
               }
+              shippingLines(first: 5) {
+                edges {
+                  node {
+                    title
+                    originalPriceSet {
+                      shopMoney {
+                        amount
+                        currencyCode
+                      }
+                    }
+                  }
+                }
+              }
               lineItems(first: 50) {
                 edges {
                   node {
@@ -304,6 +317,15 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
           return acc + parseFloat(item.originalUnitPriceSet.shopMoney.amount) * item.quantity;
         }, 0);
 
+        // Shipping charged on the order (passed through to the brand)
+        const shippingTotal = (order.shippingLines?.edges || []).reduce((acc, e) => {
+          return acc + parseFloat(e.node?.originalPriceSet?.shopMoney?.amount || 0);
+        }, 0);
+
+        // Flat platform fee deducted per order
+        const PLATFORM_FEE = 10.0;
+        const netPayout = brandTotal + shippingTotal - PLATFORM_FEE;
+
         scopedOrders.push({
           id: order.id,
           orderNumber: order.name,
@@ -329,6 +351,9 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
             : null,
           items: brandItems,
           brandTotal: brandTotal.toFixed(2),
+          shippingRate: shippingTotal.toFixed(2),
+          platformFee: PLATFORM_FEE.toFixed(2),
+          netPayout: netPayout.toFixed(2),
           currency: brandItems[0]?.originalUnitPriceSet?.shopMoney?.currencyCode || "USD",
         });
       }
