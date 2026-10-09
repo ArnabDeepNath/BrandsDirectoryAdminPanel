@@ -478,4 +478,130 @@ app.post("/api/orders/update-status", authenticateToken, async (req, res) => {
   }
 });
 
+// 5. Fetch Brand Profile (logo, banner, info) from the vendor's Shopify collection
+app.get("/api/brand-profile", authenticateToken, async (req, res) => {
+  try {
+    const activeVendor = req.vendor;
+
+    const COLLECTION_FIELDS = `
+      id
+      title
+      handle
+      description
+      image {
+        url
+        altText
+      }
+      metafields(identifiers: [
+        { namespace: "custom", key: "brand_logo" },
+        { namespace: "custom", key: "brand_banner" }
+      ]) {
+        key
+        value
+        reference {
+          ... on MediaImage {
+            image {
+              url
+            }
+          }
+        }
+      }
+    `;
+
+    // Strategy 1: find the collection through one of the vendor's products
+    // (vendor match on products is exact, so this is the most reliable path)
+    const viaProductQuery = `
+      query getBrandCollections($queryString: String!) {
+        products(first: 1, query: $queryString) {
+          edges {
+            node {
+              collections(first: 20) {
+                edges {
+                  node {
+                    ${COLLECTION_FIELDS}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    let result = await shopifyGraphQL(viaProductQuery, {
+      queryString: `vendor:"${activeVendor}"`,
+    });
+    if (result.isError) {
+      return res.status(result.status || 502).json({ error: result.message });
+    }
+
+    let collections =
+      result.data?.products?.edges?.[0]?.node?.collections?.edges?.map(
+        (e) => e.node,
+      ) || [];
+
+    // Strategy 2 (fallback): search collections by title — covers vendors
+    // that currently have 0 products in the store
+    if (collections.length === 0) {
+      const searchTerm = activeVendor.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+      const viaTitleQuery = `
+        query searchCollections($queryString: String!) {
+          collections(first: 10, query: $queryString) {
+            edges {
+              node {
+                ${COLLECTION_FIELDS}
+              }
+            }
+          }
+        }
+      `;
+      const titleResult = await shopifyGraphQL(viaTitleQuery, {
+        queryString: `title:*${searchTerm}*`,
+      });
+      if (!titleResult.isError) {
+        collections =
+          titleResult.data?.collections?.edges?.map((e) => e.node) || [];
+      }
+    }
+
+    // Pick the collection whose title best matches the vendor name
+    const vendorLower = activeVendor.trim().toLowerCase();
+    const bestMatch =
+      collections.find((c) => c.title?.trim().toLowerCase() === vendorLower) ||
+      collections.find((c) => {
+        const t = c.title?.trim().toLowerCase() || "";
+        return t && (vendorLower.includes(t) || t.includes(vendorLower));
+      }) ||
+      null;
+
+    if (!bestMatch) {
+      return res.json({ vendor: activeVendor, profile: null });
+    }
+
+    // Metafield overrides (custom.brand_logo / custom.brand_banner)
+    const getMetafieldUrl = (key) => {
+      const mf = (bestMatch.metafields || []).find((m) => m && m.key === key);
+      if (!mf) return null;
+      if (mf.reference?.image?.url) return mf.reference.image.url;
+      if (typeof mf.value === "string" && mf.value.startsWith("http"))
+        return mf.value;
+      return null;
+    };
+
+    res.json({
+      vendor: activeVendor,
+      profile: {
+        title: bestMatch.title,
+        handle: bestMatch.handle,
+        description: bestMatch.description || "",
+        logo: getMetafieldUrl("brand_logo") || bestMatch.image?.url || null,
+        banner: getMetafieldUrl("brand_banner") || bestMatch.image?.url || null,
+        image: bestMatch.image?.url || null,
+      },
+    });
+  } catch (error) {
+    res.status(502).json({ error: error.message });
+  }
+});
+
 export default app;

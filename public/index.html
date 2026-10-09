@@ -78,6 +78,67 @@
         border: 1px solid #fee2e2;
       }
 
+      /* Brand Hero (logo / banner / info from Shopify collection) */
+      .brand-hero {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+      .brand-hero-banner {
+        height: 160px;
+        background: linear-gradient(135deg, #fef2f2 0%, #f1f5f9 100%);
+        background-size: cover;
+        background-position: center;
+      }
+      .brand-hero-body {
+        display: flex;
+        gap: 20px;
+        padding: 0 30px 22px;
+        align-items: flex-end;
+        margin-top: -44px;
+      }
+      .brand-hero-logo {
+        width: 88px;
+        height: 88px;
+        border-radius: 14px;
+        background: white;
+        border: 1px solid var(--border);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 34px;
+        font-weight: 800;
+        color: var(--primary);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .brand-hero-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .brand-hero-info {
+        padding-bottom: 4px;
+        min-width: 0;
+      }
+      .brand-hero-info h3 {
+        margin: 0 0 6px 0;
+        font-size: 22px;
+      }
+      .brand-hero-info p {
+        margin: 0;
+        color: #64748b;
+        font-size: 14px;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
       /* Diagnostic Banner */
       .status-banner {
         display: none;
@@ -495,6 +556,18 @@
         <span class="brand-badge" id="vendorNameBadge">Brand Name</span>
       </div>
 
+      <!-- Brand Hero: logo, banner & info pulled from the Shopify collection -->
+      <div id="brandHero" class="brand-hero" style="display: none">
+        <div class="brand-hero-banner" id="brandHeroBanner"></div>
+        <div class="brand-hero-body">
+          <div class="brand-hero-logo" id="brandHeroLogo">B</div>
+          <div class="brand-hero-info">
+            <h3 id="brandHeroName"></h3>
+            <p id="brandHeroDesc"></p>
+          </div>
+        </div>
+      </div>
+
       <!-- Diagnostic Banner -->
       <div id="apiStatusBanner" class="status-banner"></div>
 
@@ -727,8 +800,53 @@
       }
 
       async function loadAllData() {
-        await Promise.all([fetchInventory(), fetchOrders()]);
+        await Promise.all([
+          fetchInventory(),
+          fetchOrders(),
+          fetchBrandProfile(),
+        ]);
         renderAnalytics();
+      }
+
+      async function fetchBrandProfile() {
+        const token = localStorage.getItem("vendor_jwt");
+        try {
+          const res = await fetch(`${API_BASE}/brand-profile`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return; // hero is optional — fail silently
+          const data = await res.json();
+          renderBrandHero(data.profile, data.vendor);
+        } catch (err) {
+          // Non-critical: skip hero on network failure
+        }
+      }
+
+      function renderBrandHero(profile, vendor) {
+        const name = profile?.title || vendor || "Brand";
+        const logo = profile?.logo || null;
+        const banner = profile?.banner || null;
+        const desc =
+          profile?.description ||
+          "Brand profile info has not been added to the Shopify collection yet.";
+
+        const hero = document.getElementById("brandHero");
+        hero.style.display = "block";
+
+        document.getElementById("brandHeroName").textContent = name;
+        document.getElementById("brandHeroDesc").textContent = desc;
+
+        const bannerEl = document.getElementById("brandHeroBanner");
+        if (banner) {
+          bannerEl.style.backgroundImage = `url("${banner}")`;
+        }
+
+        const logoEl = document.getElementById("brandHeroLogo");
+        if (logo) {
+          logoEl.innerHTML = `<img src="${logo}" alt="${name} logo" />`;
+        } else {
+          logoEl.textContent = name.trim().charAt(0).toUpperCase() || "B";
+        }
       }
 
       async function fetchInventory() {
