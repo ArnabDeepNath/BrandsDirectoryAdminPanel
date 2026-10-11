@@ -492,11 +492,17 @@ app.get("/api/brand-profile", authenticateToken, async (req, res) => {
         url
         altText
       }
-      metafields(identifiers: [
-        { namespace: "custom", key: "brand_logo" },
-        { namespace: "custom", key: "brand_banner" }
-      ]) {
-        key
+      brandLogo: metafield(namespace: "custom", key: "brand_logo") {
+        value
+        reference {
+          ... on MediaImage {
+            image {
+              url
+            }
+          }
+        }
+      }
+      brandBanner: metafield(namespace: "custom", key: "brand_banner") {
         value
         reference {
           ... on MediaImage {
@@ -579,8 +585,7 @@ app.get("/api/brand-profile", authenticateToken, async (req, res) => {
     }
 
     // Metafield overrides (custom.brand_logo / custom.brand_banner)
-    const getMetafieldUrl = (key) => {
-      const mf = (bestMatch.metafields || []).find((m) => m && m.key === key);
+    const getMetafieldUrl = (mf) => {
       if (!mf) return null;
       if (mf.reference?.image?.url) return mf.reference.image.url;
       if (typeof mf.value === "string" && mf.value.startsWith("http"))
@@ -594,8 +599,8 @@ app.get("/api/brand-profile", authenticateToken, async (req, res) => {
         title: bestMatch.title,
         handle: bestMatch.handle,
         description: bestMatch.description || "",
-        logo: getMetafieldUrl("brand_logo") || bestMatch.image?.url || null,
-        banner: getMetafieldUrl("brand_banner") || bestMatch.image?.url || null,
+        logo: getMetafieldUrl(bestMatch.brandLogo) || bestMatch.image?.url || null,
+        banner: getMetafieldUrl(bestMatch.brandBanner) || bestMatch.image?.url || null,
         image: bestMatch.image?.url || null,
       },
     });
