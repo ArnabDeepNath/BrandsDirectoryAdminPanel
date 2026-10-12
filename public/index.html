@@ -789,21 +789,21 @@
             <div class="kpi-sub">From scoped customer orders</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-title">Gross Profit (Est. 70%)</div>
+            <div class="kpi-title">Gross Profit</div>
             <div class="kpi-value" id="kpiProfit" style="color: var(--success)">
               $0.00
             </div>
-            <div class="kpi-sub">Estimated net margin</div>
+            <div class="kpi-sub">After tax &amp; 10% commission</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-title">Total Orders Fulfilled</div>
+            <div class="kpi-title">Total Orders Received</div>
             <div class="kpi-value" id="kpiOrders">0</div>
             <div class="kpi-sub">Customer purchases</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-title">Active Catalog Items</div>
-            <div class="kpi-value" id="kpiProducts">0</div>
-            <div class="kpi-sub">Live Shopify listings</div>
+            <div class="kpi-title">Orders to be Fulfilled</div>
+            <div class="kpi-value" id="kpiPending">0</div>
+            <div class="kpi-sub">Awaiting fulfillment</div>
           </div>
         </div>
 
@@ -814,7 +814,7 @@
             <canvas id="revenueChart" height="240"></canvas>
           </div>
           <div class="chart-box">
-            <h4>Catalog Status & Distribution</h4>
+            <h4>Orders to be Fulfilled</h4>
             <canvas id="catalogChart" height="240"></canvas>
           </div>
           <div class="chart-box">
@@ -1175,16 +1175,24 @@
           (sum, o) => sum + parseFloat(o.brandTotal || 0),
           0,
         );
-        const estProfit = totalRev * 0.7;
+        const totalTax = globalOrders.reduce(
+          (sum, o) => sum + parseFloat(o.orderTax || 0),
+          0,
+        );
+        const commission = totalRev * 0.1;
+        const grossProfit = totalRev - totalTax - commission;
         const totalOrdersCount = globalOrders.length;
-        const totalProductsCount = globalProducts.length;
+        const fulfilledCount = globalOrders.filter(
+          (o) => o.fulfillmentStatus === "FULFILLED",
+        ).length;
+        const pendingCount = totalOrdersCount - fulfilledCount;
 
         document.getElementById("kpiRevenue").textContent =
           `$${totalRev.toFixed(2)}`;
         document.getElementById("kpiProfit").textContent =
-          `$${estProfit.toFixed(2)}`;
+          `$${grossProfit.toFixed(2)}`;
         document.getElementById("kpiOrders").textContent = totalOrdersCount;
-        document.getElementById("kpiProducts").textContent = totalProductsCount;
+        document.getElementById("kpiPending").textContent = pendingCount;
 
         [
           "revenueChart",
@@ -1249,28 +1257,21 @@
           },
         });
 
-        // Chart 2: Catalog
-        const activeCount = globalProducts.filter(
-          (p) => p.status === "ACTIVE",
-        ).length;
-        const draftCount = globalProducts.filter(
-          (p) => p.status === "DRAFT",
-        ).length;
+        // Chart 2: Orders to be Fulfilled
         const ctxCatalog = document
           .getElementById("catalogChart")
           .getContext("2d");
         chartsInstances["catalogChart"] = new Chart(ctxCatalog, {
           type: "doughnut",
           data: {
-            labels: ["Active Items", "Draft / Unlisted"],
+            labels: ["Orders to be Fulfilled", "Fulfilled Orders"],
             datasets: [
               {
                 data: [
-                  activeCount ||
-                    (globalProducts.length ? globalProducts.length : 1),
-                  draftCount,
+                  pendingCount || (globalOrders.length === 0 ? 1 : 0),
+                  fulfilledCount,
                 ],
-                backgroundColor: ["#16a34a", "#94a3b8"],
+                backgroundColor: ["#f59e0b", "#16a34a"],
               },
             ],
           },
@@ -1308,12 +1309,7 @@
         });
 
         // Chart 4: Fulfillment
-        const fulfilledCount = globalOrders.filter(
-          (o) => o.fulfillmentStatus === "FULFILLED",
-        ).length;
-        const unfulfilledCount = globalOrders.filter(
-          (o) => o.fulfillmentStatus !== "FULFILLED",
-        ).length;
+        const unfulfilledCount = pendingCount;
         const ctxFulfillment = document
           .getElementById("fulfillmentChart")
           .getContext("2d");

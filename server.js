@@ -248,6 +248,12 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
               createdAt
               displayFinancialStatus
               displayFulfillmentStatus
+              totalTaxSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
               shippingAddress {
                 name
                 address1
@@ -351,6 +357,7 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
             : null,
           items: brandItems,
           brandTotal: brandTotal.toFixed(2),
+          orderTax: parseFloat(order.totalTaxSet?.shopMoney?.amount || 0).toFixed(2),
           shippingRate: shippingTotal.toFixed(2),
           platformFee: PLATFORM_FEE.toFixed(2),
           netPayout: netPayout.toFixed(2),
