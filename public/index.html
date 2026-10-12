@@ -267,90 +267,6 @@
         box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
       }
 
-      /* Brand Hero (logo / banner / info from Shopify collection) */
-      .brand-hero {
-        background: white;
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        overflow: hidden;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
-      }
-      .brand-hero-banner {
-        position: relative;
-        height: 210px;
-        background: linear-gradient(135deg, #1e293b 0%, #7f1d1d 60%, #da291c 100%);
-        background-size: cover;
-        background-position: center 30%;
-      }
-      .brand-hero-banner-overlay {
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(
-          180deg,
-          rgba(15, 23, 42, 0.05) 0%,
-          rgba(15, 23, 42, 0.35) 55%,
-          rgba(15, 23, 42, 0.78) 100%
-        );
-        display: flex;
-        align-items: flex-end;
-        gap: 18px;
-        padding: 22px 30px;
-        box-sizing: border-box;
-      }
-      .brand-hero-logo {
-        width: 76px;
-        height: 76px;
-        border-radius: 16px;
-        background: white;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 30px;
-        font-weight: 800;
-        color: var(--primary);
-        overflow: hidden;
-        flex-shrink: 0;
-        padding: 8px;
-        box-sizing: border-box;
-      }
-      .brand-hero-logo img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-      }
-      .brand-hero-info {
-        min-width: 0;
-        padding-bottom: 4px;
-      }
-      .brand-hero-info h3 {
-        margin: 0;
-        font-size: 26px;
-        font-weight: 800;
-        letter-spacing: 0.4px;
-        color: #ffffff;
-        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
-      }
-      @media (max-width: 640px) {
-        .brand-hero-banner {
-          height: 160px;
-        }
-        .brand-hero-banner-overlay {
-          padding: 16px 18px;
-          gap: 12px;
-        }
-        .brand-hero-logo {
-          width: 56px;
-          height: 56px;
-          font-size: 22px;
-          border-radius: 12px;
-        }
-        .brand-hero-info h3 {
-          font-size: 20px;
-        }
-      }
-
       /* Diagnostic Banner */
       .status-banner {
         display: none;
@@ -891,18 +807,6 @@
         <span class="brand-badge" id="vendorNameBadge">Brand Name</span>
       </div>
 
-      <!-- Brand Hero: logo, banner & info pulled from the Shopify collection -->
-      <div id="brandHero" class="brand-hero" style="display: none">
-        <div class="brand-hero-banner" id="brandHeroBanner">
-          <div class="brand-hero-banner-overlay">
-            <div class="brand-hero-logo" id="brandHeroLogo">B</div>
-            <div class="brand-hero-info">
-              <h3 id="brandHeroName"></h3>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Diagnostic Banner -->
       <div id="apiStatusBanner" class="status-banner"></div>
 
@@ -1135,49 +1039,8 @@
       }
 
       async function loadAllData() {
-        await Promise.all([
-          fetchInventory(),
-          fetchOrders(),
-          fetchBrandProfile(),
-        ]);
+        await Promise.all([fetchInventory(), fetchOrders()]);
         renderAnalytics();
-      }
-
-      async function fetchBrandProfile() {
-        const token = localStorage.getItem("vendor_jwt");
-        try {
-          const res = await fetch(`${API_BASE}/brand-profile`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) return; // hero is optional — fail silently
-          const data = await res.json();
-          renderBrandHero(data.profile, data.vendor);
-        } catch (err) {
-          // Non-critical: skip hero on network failure
-        }
-      }
-
-      function renderBrandHero(profile, vendor) {
-        const name = profile?.title || vendor || "Brand";
-        const logo = profile?.logo || null;
-        const banner = profile?.banner || null;
-
-        const hero = document.getElementById("brandHero");
-        hero.style.display = "block";
-
-        document.getElementById("brandHeroName").textContent = name;
-
-        const bannerEl = document.getElementById("brandHeroBanner");
-        if (banner) {
-          bannerEl.style.backgroundImage = `url("${banner}")`;
-        }
-
-        const logoEl = document.getElementById("brandHeroLogo");
-        if (logo) {
-          logoEl.innerHTML = `<img src="${logo}" alt="${name} logo" />`;
-        } else {
-          logoEl.textContent = name.trim().charAt(0).toUpperCase() || "B";
-        }
       }
 
       async function fetchInventory() {
