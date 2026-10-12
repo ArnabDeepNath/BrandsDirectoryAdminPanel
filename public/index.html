@@ -1617,12 +1617,14 @@
         // Payout breakdown (with fallbacks for older cached payloads)
         const shippingRate = parseFloat(order.shippingRate || 0);
         const platformFee = parseFloat(
-          order.platformFee !== undefined ? order.platformFee : 10,
+          order.platformFee !== undefined
+            ? order.platformFee
+            : parseFloat(order.brandTotal) * 0.1,
         );
         const netPayout =
           order.netPayout !== undefined
             ? parseFloat(order.netPayout)
-            : parseFloat(order.brandTotal) + shippingRate - platformFee;
+            : parseFloat(order.brandTotal) + shippingRate + platformFee;
 
         itemsHtml += `
           </tbody>
@@ -1636,8 +1638,8 @@
               <td>$${shippingRate.toFixed(2)}</td>
             </tr>
             <tr style="background: #f8fafc;">
-              <td colspan="4" style="text-align: right;">Platform Fee:</td>
-              <td style="color: #dc2626;">-$${platformFee.toFixed(2)}</td>
+              <td colspan="4" style="text-align: right;">Platform Fee (10%):</td>
+              <td style="color: var(--success);">+$${platformFee.toFixed(2)}</td>
             </tr>
             <tr style="background: #f8fafc; font-weight: bold; border-top: 2px solid #e2e8f0;">
               <td colspan="4" style="text-align: right;">Total Brand Payout:</td>

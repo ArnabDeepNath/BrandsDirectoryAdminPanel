@@ -328,9 +328,9 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
           return acc + parseFloat(e.node?.originalPriceSet?.shopMoney?.amount || 0);
         }, 0);
 
-        // Flat platform fee deducted per order
-        const PLATFORM_FEE = 10.0;
-        const netPayout = brandTotal + shippingTotal - PLATFORM_FEE;
+        // 10% platform commission on brand items, added on top of items + shipping
+        const platformFee = brandTotal * 0.1;
+        const netPayout = brandTotal + shippingTotal + platformFee;
 
         scopedOrders.push({
           id: order.id,
@@ -359,7 +359,7 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
           brandTotal: brandTotal.toFixed(2),
           orderTax: parseFloat(order.totalTaxSet?.shopMoney?.amount || 0).toFixed(2),
           shippingRate: shippingTotal.toFixed(2),
-          platformFee: PLATFORM_FEE.toFixed(2),
+          platformFee: platformFee.toFixed(2),
           netPayout: netPayout.toFixed(2),
           currency: brandItems[0]?.originalUnitPriceSet?.shopMoney?.currencyCode || "USD",
         });
