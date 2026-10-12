@@ -930,14 +930,14 @@
           <div class="kpi-card">
             <div class="kpi-title">Total Brand Revenue</div>
             <div class="kpi-value" id="kpiRevenue">$0.00</div>
-            <div class="kpi-sub">From scoped customer orders</div>
+            <div class="kpi-sub">Items + shipping + 10% fee</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-title">Gross Profit</div>
             <div class="kpi-value" id="kpiProfit" style="color: var(--success)">
               $0.00
             </div>
-            <div class="kpi-sub">After tax &amp; 10% commission</div>
+            <div class="kpi-sub">Revenue after tax</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-title">Total Orders Received</div>
@@ -1301,7 +1301,10 @@
                 </td>
                 <td>${itemsList}</td>
                 <td><span class="status-tag ${statusClass}">${order.fulfillmentStatus}</span></td>
-                <td><strong>${order.currency} $${order.brandTotal}</strong></td>
+                <td>
+                  <strong>${order.currency} $${order.netPayout !== undefined ? order.netPayout : (parseFloat(order.brandTotal) + parseFloat(order.shippingRate || 0) + parseFloat(order.brandTotal) * 0.1).toFixed(2)}</strong><br>
+                  <span style="color: #64748b; font-size: 11px;">items + shipping + 10% fee</span>
+                </td>
               </tr>
             `;
           });
@@ -1311,16 +1314,24 @@
       }
 
       function renderAnalytics() {
+        // Brand revenue per order = items + shipping + 10% platform fee (netPayout)
         const totalRev = globalOrders.reduce(
-          (sum, o) => sum + parseFloat(o.brandTotal || 0),
+          (sum, o) =>
+            sum +
+            parseFloat(
+              o.netPayout !== undefined
+                ? o.netPayout
+                : parseFloat(o.brandTotal || 0) +
+                    parseFloat(o.shippingRate || 0) +
+                    parseFloat(o.brandTotal || 0) * 0.1,
+            ),
           0,
         );
         const totalTax = globalOrders.reduce(
           (sum, o) => sum + parseFloat(o.orderTax || 0),
           0,
         );
-        const commission = totalRev * 0.1;
-        const grossProfit = totalRev - totalTax - commission;
+        const grossProfit = totalRev - totalTax;
         const totalOrdersCount = globalOrders.length;
         const fulfilledCount = globalOrders.filter(
           (o) => o.fulfillmentStatus === "FULFILLED",
