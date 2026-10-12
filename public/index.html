@@ -332,19 +332,6 @@
         color: #ffffff;
         text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
       }
-      .brand-hero-body {
-        padding: 18px 30px 22px;
-      }
-      .brand-hero-body p {
-        margin: 0;
-        color: #475569;
-        font-size: 14px;
-        line-height: 1.6;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }
       @media (max-width: 640px) {
         .brand-hero-banner {
           height: 160px;
@@ -361,9 +348,6 @@
         }
         .brand-hero-info h3 {
           font-size: 20px;
-        }
-        .brand-hero-body {
-          padding: 14px 18px 18px;
         }
       }
 
@@ -917,9 +901,6 @@
             </div>
           </div>
         </div>
-        <div class="brand-hero-body">
-          <p id="brandHeroDesc"></p>
-        </div>
       </div>
 
       <!-- Diagnostic Banner -->
@@ -1180,15 +1161,11 @@
         const name = profile?.title || vendor || "Brand";
         const logo = profile?.logo || null;
         const banner = profile?.banner || null;
-        const desc =
-          profile?.description ||
-          "Brand profile info has not been added to the Shopify collection yet.";
 
         const hero = document.getElementById("brandHero");
         hero.style.display = "block";
 
         document.getElementById("brandHeroName").textContent = name;
-        document.getElementById("brandHeroDesc").textContent = desc;
 
         const bannerEl = document.getElementById("brandHeroBanner");
         if (banner) {
