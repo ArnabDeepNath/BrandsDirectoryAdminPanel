@@ -251,38 +251,49 @@
       .brand-hero {
         background: white;
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: 14px;
         overflow: hidden;
         margin-bottom: 20px;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
       }
       .brand-hero-banner {
-        height: 160px;
-        background: linear-gradient(135deg, #fef2f2 0%, #f1f5f9 100%);
+        position: relative;
+        height: 210px;
+        background: linear-gradient(135deg, #1e293b 0%, #7f1d1d 60%, #da291c 100%);
         background-size: cover;
-        background-position: center;
+        background-position: center 30%;
       }
-      .brand-hero-body {
+      .brand-hero-banner-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          180deg,
+          rgba(15, 23, 42, 0.05) 0%,
+          rgba(15, 23, 42, 0.35) 55%,
+          rgba(15, 23, 42, 0.78) 100%
+        );
         display: flex;
-        gap: 20px;
-        padding: 0 30px 22px;
         align-items: flex-end;
-        margin-top: -44px;
+        gap: 18px;
+        padding: 22px 30px;
+        box-sizing: border-box;
       }
       .brand-hero-logo {
-        width: 88px;
-        height: 88px;
-        border-radius: 14px;
+        width: 76px;
+        height: 76px;
+        border-radius: 16px;
         background: white;
-        border: 1px solid var(--border);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 34px;
+        font-size: 30px;
         font-weight: 800;
         color: var(--primary);
         overflow: hidden;
         flex-shrink: 0;
+        padding: 8px;
+        box-sizing: border-box;
       }
       .brand-hero-logo img {
         width: 100%;
@@ -290,22 +301,50 @@
         object-fit: contain;
       }
       .brand-hero-info {
-        padding-bottom: 4px;
         min-width: 0;
+        padding-bottom: 4px;
       }
       .brand-hero-info h3 {
-        margin: 0 0 6px 0;
-        font-size: 22px;
-      }
-      .brand-hero-info p {
         margin: 0;
-        color: #64748b;
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        color: #ffffff;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+      }
+      .brand-hero-body {
+        padding: 18px 30px 22px;
+      }
+      .brand-hero-body p {
+        margin: 0;
+        color: #475569;
         font-size: 14px;
-        line-height: 1.5;
+        line-height: 1.6;
         display: -webkit-box;
-        -webkit-line-clamp: 2;
+        -webkit-line-clamp: 3;
         -webkit-box-orient: vertical;
         overflow: hidden;
+      }
+      @media (max-width: 640px) {
+        .brand-hero-banner {
+          height: 160px;
+        }
+        .brand-hero-banner-overlay {
+          padding: 16px 18px;
+          gap: 12px;
+        }
+        .brand-hero-logo {
+          width: 56px;
+          height: 56px;
+          font-size: 22px;
+          border-radius: 12px;
+        }
+        .brand-hero-info h3 {
+          font-size: 20px;
+        }
+        .brand-hero-body {
+          padding: 14px 18px 18px;
+        }
       }
 
       /* Diagnostic Banner */
@@ -749,13 +788,16 @@
 
       <!-- Brand Hero: logo, banner & info pulled from the Shopify collection -->
       <div id="brandHero" class="brand-hero" style="display: none">
-        <div class="brand-hero-banner" id="brandHeroBanner"></div>
-        <div class="brand-hero-body">
-          <div class="brand-hero-logo" id="brandHeroLogo">B</div>
-          <div class="brand-hero-info">
-            <h3 id="brandHeroName"></h3>
-            <p id="brandHeroDesc"></p>
+        <div class="brand-hero-banner" id="brandHeroBanner">
+          <div class="brand-hero-banner-overlay">
+            <div class="brand-hero-logo" id="brandHeroLogo">B</div>
+            <div class="brand-hero-info">
+              <h3 id="brandHeroName"></h3>
+            </div>
           </div>
+        </div>
+        <div class="brand-hero-body">
+          <p id="brandHeroDesc"></p>
         </div>
       </div>
 
