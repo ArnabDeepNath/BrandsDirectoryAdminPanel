@@ -239,8 +239,12 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
     const activeVendor = req.vendor;
 
     const query = `
-      query getOrders {
-        orders(first: 50, sortKey: CREATED_AT, reverse: true) {
+      query getOrders($cursor: String) {
+        orders(first: 50, after: $cursor, sortKey: CREATED_AT, reverse: true) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           edges {
             node {
               id
@@ -304,13 +308,26 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
       }
     `;
 
-    const result = await shopifyGraphQL(query);
+    // Paginate through ALL store orders (newest first) so brand orders
+    // are not missed when other brands' orders fill the first page.
+    const rawOrders = [];
+    let cursor = null;
+    let hasNextPage = true;
+    const MAX_PAGES = 40; // safety cap: 40 pages x 50 = 2000 orders
 
-    if (result.isError) {
-      return res.status(result.status || 502).json({ error: result.message });
+    while (hasNextPage && rawOrders.length < MAX_PAGES * 50) {
+      const result = await shopifyGraphQL(query, { cursor });
+
+      if (result.isError) {
+        return res.status(result.status || 502).json({ error: result.message });
+      }
+
+      const ordersConn = result.data?.orders;
+      rawOrders.push(...(ordersConn?.edges || []));
+      hasNextPage = ordersConn?.pageInfo?.hasNextPage || false;
+      cursor = ordersConn?.pageInfo?.endCursor || null;
     }
 
-    const rawOrders = result.data?.orders?.edges || [];
     const scopedOrders = [];
 
     rawOrders.forEach(({ node: order }) => {
