@@ -328,9 +328,9 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
           return acc + parseFloat(e.node?.originalPriceSet?.shopMoney?.amount || 0);
         }, 0);
 
-        // 10% platform commission on brand items, added on top of items + shipping
+        // 10% platform commission on brand items, deducted from items + shipping
         const platformFee = brandTotal * 0.1;
-        const netPayout = brandTotal + shippingTotal + platformFee;
+        const netPayout = brandTotal + shippingTotal - platformFee;
 
         scopedOrders.push({
           id: order.id,

@@ -834,7 +834,7 @@
           <div class="kpi-card">
             <div class="kpi-title">Total Brand Revenue</div>
             <div class="kpi-value" id="kpiRevenue">$0.00</div>
-            <div class="kpi-sub">Items + shipping + 10% fee</div>
+            <div class="kpi-sub">Items + shipping &minus; 10% fee</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-title">Gross Profit</div>
@@ -1165,8 +1165,8 @@
                 <td>${itemsList}</td>
                 <td><span class="status-tag ${statusClass}">${order.fulfillmentStatus}</span></td>
                 <td>
-                  <strong>${order.currency} $${order.netPayout !== undefined ? order.netPayout : (parseFloat(order.brandTotal) + parseFloat(order.shippingRate || 0) + parseFloat(order.brandTotal) * 0.1).toFixed(2)}</strong><br>
-                  <span style="color: #64748b; font-size: 11px;">items + shipping + 10% fee</span>
+                  <strong>${order.currency} $${order.netPayout !== undefined ? order.netPayout : (parseFloat(order.brandTotal) + parseFloat(order.shippingRate || 0) - parseFloat(order.brandTotal) * 0.1).toFixed(2)}</strong><br>
+                  <span style="color: #64748b; font-size: 11px;">items + shipping &minus; 10% fee</span>
                 </td>
               </tr>
             `;
@@ -1177,7 +1177,7 @@
       }
 
       function renderAnalytics() {
-        // Brand revenue per order = items + shipping + 10% platform fee (netPayout)
+        // Brand revenue per order = items + shipping - 10% platform fee (netPayout)
         const totalRev = globalOrders.reduce(
           (sum, o) =>
             sum +
@@ -1185,7 +1185,7 @@
               o.netPayout !== undefined
                 ? o.netPayout
                 : parseFloat(o.brandTotal || 0) +
-                    parseFloat(o.shippingRate || 0) +
+                    parseFloat(o.shippingRate || 0) -
                     parseFloat(o.brandTotal || 0) * 0.1,
             ),
           0,
@@ -1475,7 +1475,7 @@
         const netPayout =
           order.netPayout !== undefined
             ? parseFloat(order.netPayout)
-            : parseFloat(order.brandTotal) + shippingRate + platformFee;
+            : parseFloat(order.brandTotal) + shippingRate - platformFee;
 
         itemsHtml += `
           </tbody>
@@ -1490,7 +1490,7 @@
             </tr>
             <tr style="background: #f8fafc;">
               <td colspan="4" style="text-align: right;">Platform Fee (10%):</td>
-              <td style="color: var(--success);">+$${platformFee.toFixed(2)}</td>
+              <td style="color: var(--danger, #dc2626);">-$${platformFee.toFixed(2)}</td>
             </tr>
             <tr style="background: #f8fafc; font-weight: bold; border-top: 2px solid #e2e8f0;">
               <td colspan="4" style="text-align: right;">Total Brand Payout:</td>
