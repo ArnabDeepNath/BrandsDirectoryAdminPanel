@@ -258,6 +258,17 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
                   currencyCode
                 }
               }
+              transactions(first: 10) {
+                kind
+                status
+                fees {
+                  amount {
+                    amount
+                    currencyCode
+                  }
+                  type
+                }
+              }
               shippingAddress {
                 name
                 address1
@@ -349,6 +360,24 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
         const platformFee = brandTotal * 0.1;
         const netPayout = brandTotal + shippingTotal - platformFee;
 
+        // Shopify platform fee (transaction fees charged by Shopify, e.g. Shopify
+        // Payments processing fees) on successful sale/capture transactions
+        const shopifyFee = (order.transactions || [])
+          .filter(
+            (t) =>
+              t.status === "SUCCESS" &&
+              (t.kind === "SALE" || t.kind === "CAPTURE"),
+          )
+          .reduce((acc, t) => {
+            return (
+              acc +
+              (t.fees || []).reduce(
+                (a, f) => a + parseFloat(f.amount?.amount || 0),
+                0,
+              )
+            );
+          }, 0);
+
         scopedOrders.push({
           id: order.id,
           orderNumber: order.name,
@@ -377,6 +406,7 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
           orderTax: parseFloat(order.totalTaxSet?.shopMoney?.amount || 0).toFixed(2),
           shippingRate: shippingTotal.toFixed(2),
           platformFee: platformFee.toFixed(2),
+          shopifyFee: shopifyFee.toFixed(2),
           netPayout: netPayout.toFixed(2),
           currency: brandItems[0]?.originalUnitPriceSet?.shopMoney?.currencyCode || "USD",
         });
