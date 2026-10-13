@@ -1269,9 +1269,10 @@
                 .join(", ")
             : "N/A";
 
+          // One item per line within the cell (multi-line cell in Excel/Sheets)
           const items = (o.items || [])
             .map((i) => `${i.quantity}x ${i.title} (${i.sku || "No SKU"})`)
-            .join("; ");
+            .join("\n");
 
           return [
             o.orderNumber || "",
@@ -1328,15 +1329,16 @@
           return;
         }
 
-        // Build TSV (tab-separated) so it pastes cleanly into Google Sheets
+        // Build TSV (tab-separated) so it pastes cleanly into Google Sheets.
+        // Fields containing tabs/newlines are quoted — the Sheets paste parser
+        // respects quoted multi-line fields, keeping each order on one row.
+        const tsvEscape = (value) => {
+          const str = String(value ?? "");
+          return /["\t\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+        };
+
         const rows = buildOrdersExportRows();
-        const tsv = rows
-          .map((r) =>
-            r
-              .map((v) => String(v ?? "").replace(/[\t\r\n]+/g, " ").trim())
-              .join("\t"),
-          )
-          .join("\n");
+        const tsv = rows.map((r) => r.map(tsvEscape).join("\t")).join("\n");
 
         let copied = false;
         try {
