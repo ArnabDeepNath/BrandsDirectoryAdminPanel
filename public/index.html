@@ -385,6 +385,51 @@
           0 12px 32px -16px rgba(15, 23, 42, 0.08);
       }
 
+      /* Export toolbar */
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .export-bar {
+        display: flex;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+      .btn-export {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: white;
+        border: 1px solid var(--border);
+        padding: 9px 16px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        color: #475569;
+        transition:
+          background 0.15s ease,
+          color 0.15s ease,
+          border-color 0.15s ease;
+      }
+      .btn-export:hover {
+        background: #f8fafc;
+        color: var(--dark);
+        border-color: #cbd5e1;
+      }
+      .btn-export:active {
+        transform: scale(0.98);
+      }
+      .btn-export.sheets:hover {
+        background: #f0fdf4;
+        color: var(--success);
+        border-color: #86efac;
+      }
+
       /* KPI Cards */
       .kpi-grid {
         display: grid;
@@ -903,13 +948,28 @@
 
       <!-- Tab 3: Orders -->
       <div id="ordersPanel" class="panel" style="display: none">
-        <h3 style="margin-top: 0; margin-bottom: 4px">
-          Scoped Customer Orders
-        </h3>
-        <p class="hint-text">
-          💡 Click on any order to view full shipping address & toggle
-          fulfillment status.
-        </p>
+        <div class="panel-header">
+          <div>
+            <h3 style="margin-top: 0; margin-bottom: 4px">
+              Scoped Customer Orders
+            </h3>
+            <p class="hint-text">
+              💡 Click on any order to view full shipping address & toggle
+              fulfillment status.
+            </p>
+          </div>
+          <div class="export-bar">
+            <button class="btn-export" onclick="exportOrdersCSV()">
+              📄 Export CSV
+            </button>
+            <button
+              class="btn-export sheets"
+              onclick="exportOrdersToGoogleSheets()"
+            >
+              📊 Export to Google Sheets
+            </button>
+          </div>
+        </div>
         <table>
           <thead>
             <tr>
@@ -1173,6 +1233,139 @@
           });
         } catch (err) {
           tbody.innerHTML = `<tr><td colspan="6" class="error-cell">Network failure: ${err.message}</td></tr>`;
+        }
+      }
+
+      /* ===== Orders Export (CSV / Google Sheets) ===== */
+      function buildOrdersExportRows() {
+        const headers = [
+          "Order #",
+          "Date",
+          "Customer",
+          "Email",
+          "Shipping Address",
+          "Items Ordered",
+          "Fulfillment Status",
+          "Brand Total",
+          "Shipping",
+          "Platform Fee",
+          "Net Payout",
+          "Currency",
+        ];
+
+        const rows = globalOrders.map((o) => {
+          const addr = o.shippingAddress
+            ? [
+                o.shippingAddress.name,
+                o.shippingAddress.address1,
+                o.shippingAddress.address2,
+                o.shippingAddress.city,
+                o.shippingAddress.province,
+                o.shippingAddress.zip,
+                o.shippingAddress.country,
+              ]
+                .filter(Boolean)
+                .join(", ")
+            : "N/A";
+
+          const items = (o.items || [])
+            .map((i) => `${i.quantity}x ${i.title} (${i.sku || "No SKU"})`)
+            .join("; ");
+
+          return [
+            o.orderNumber || "",
+            o.date ? new Date(o.date).toLocaleDateString() : "",
+            o.customer?.name || "",
+            o.customer?.email || "",
+            addr,
+            items,
+            o.fulfillmentStatus || "",
+            o.brandTotal || "0.00",
+            o.shippingRate || "0.00",
+            o.platformFee || "0.00",
+            o.netPayout || "0.00",
+            o.currency || "USD",
+          ];
+        });
+
+        return [headers, ...rows];
+      }
+
+      function csvEscape(value) {
+        const str = String(value ?? "");
+        return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+      }
+
+      function exportOrdersCSV() {
+        if (!globalOrders.length) {
+          alert("No orders to export yet. Load the orders list first.");
+          return;
+        }
+
+        const rows = buildOrdersExportRows();
+        const csv = rows.map((r) => r.map(csvEscape).join(",")).join("\r\n");
+
+        // BOM so Excel/Sheets detect UTF-8 correctly
+        const blob = new Blob(["\uFEFF" + csv], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `orders-export-${dateStamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      async function exportOrdersToGoogleSheets() {
+        if (!globalOrders.length) {
+          alert("No orders to export yet. Load the orders list first.");
+          return;
+        }
+
+        // Build TSV (tab-separated) so it pastes cleanly into Google Sheets
+        const rows = buildOrdersExportRows();
+        const tsv = rows
+          .map((r) =>
+            r
+              .map((v) => String(v ?? "").replace(/[\t\r\n]+/g, " ").trim())
+              .join("\t"),
+          )
+          .join("\n");
+
+        let copied = false;
+        try {
+          await navigator.clipboard.writeText(tsv);
+          copied = true;
+        } catch (err) {
+          // Fallback for non-secure contexts / older browsers
+          const ta = document.createElement("textarea");
+          ta.value = tsv;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          try {
+            copied = document.execCommand("copy");
+          } catch (e) {
+            copied = false;
+          }
+          document.body.removeChild(ta);
+        }
+
+        window.open("https://docs.google.com/spreadsheets/create", "_blank");
+
+        if (copied) {
+          alert(
+            "Order data copied to your clipboard! A new Google Sheet has been opened — click cell A1 and press Ctrl+V (Cmd+V on Mac) to paste.",
+          );
+        } else {
+          alert(
+            "A new Google Sheet has been opened, but the data could not be copied automatically. Please use the CSV export instead and import it via File > Import in Google Sheets.",
+          );
         }
       }
 
