@@ -304,6 +304,9 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
                     sku
                     vendor
                     quantity
+                    variant {
+                      title
+                    }
                     originalUnitPriceSet {
                       shopMoney {
                         amount

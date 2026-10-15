@@ -1637,7 +1637,7 @@
             <thead>
               <tr>
                 <th>Item</th>
-                <th>SKU</th>
+                <th>Color</th>
                 <th>Qty</th>
                 <th>Unit Price</th>
                 <th>Subtotal</th>
@@ -1654,7 +1654,7 @@
           itemsHtml += `
             <tr>
               <td><strong>${i.title}</strong></td>
-              <td><code>${i.sku || "N/A"}</code></td>
+              <td>${i.variant?.title && i.variant.title !== "Default Title" ? i.variant.title : "N/A"}</td>
               <td>${i.quantity}</td>
               <td>$${unitPrice.toFixed(2)}</td>
               <td><strong>$${subtotal}</strong></td>
