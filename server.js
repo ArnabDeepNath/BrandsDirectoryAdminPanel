@@ -359,9 +359,8 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
           return acc + parseFloat(e.node?.originalPriceSet?.shopMoney?.amount || 0);
         }, 0);
 
-        // 10% platform commission on brand items, deducted from items + shipping
+        // Lbeauty commission on sale: 10% of brand items subtotal
         const platformFee = brandTotal * 0.1;
-        const netPayout = brandTotal + shippingTotal - platformFee;
 
         // Shopify platform fee (transaction fees charged by Shopify, e.g. Shopify
         // Payments processing fees) on successful sale/capture transactions
@@ -380,6 +379,9 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
               )
             );
           }, 0);
+
+        // Net payout = items + shipping - Lbeauty commission - Shopify platform fee
+        const netPayout = brandTotal + shippingTotal - platformFee - shopifyFee;
 
         scopedOrders.push({
           id: order.id,
