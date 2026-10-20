@@ -238,6 +238,40 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;
 
+    // Fetch this vendor's product IDs first. A line item's "vendor" field is a
+    // snapshot taken at order time, so orders placed while the product's
+    // Vendor field was misspelled keep the old spelling and fail the exact
+    // vendor-name match below. Matching by product ID catches those orders too.
+    const vendorProductIds = new Set();
+    const productIdsQuery = `
+      query getVendorProductIds($cursor: String, $queryString: String!) {
+        products(first: 250, after: $cursor, query: $queryString) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    `;
+    let prodCursor = null;
+    let prodHasNext = true;
+    while (prodHasNext) {
+      const prodResult = await shopifyGraphQL(productIdsQuery, {
+        cursor: prodCursor,
+        queryString: `vendor:"${activeVendor}"`,
+      });
+      if (prodResult.isError) break; // fall back to vendor-name matching only
+      const prodConn = prodResult.data?.products;
+      (prodConn?.edges || []).forEach(({ node }) => vendorProductIds.add(node.id));
+      prodHasNext = prodConn?.pageInfo?.hasNextPage || false;
+      prodCursor = prodConn?.pageInfo?.endCursor || null;
+    }
+
     const query = `
       query getOrders($cursor: String) {
         orders(first: 50, after: $cursor, sortKey: CREATED_AT, reverse: true) {
@@ -304,6 +338,9 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
                     sku
                     vendor
                     quantity
+                    product {
+                      id
+                    }
                     variant {
                       title
                     }
@@ -347,7 +384,11 @@ app.get("/api/orders", authenticateToken, async (req, res) => {
     rawOrders.forEach(({ node: order }) => {
       const brandItems = order.lineItems.edges
         .map((e) => e.node)
-        .filter((item) => item.vendor?.trim().toLowerCase() === activeVendor.toLowerCase());
+        .filter(
+          (item) =>
+            item.vendor?.trim().toLowerCase() === activeVendor.toLowerCase() ||
+            (item.product?.id && vendorProductIds.has(item.product.id)),
+        );
 
       if (brandItems.length > 0) {
         const brandTotal = brandItems.reduce((acc, item) => {
