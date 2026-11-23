@@ -4,6 +4,16 @@ import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  buildOrderEmail,
+  ensureOrderWebhook,
+  getAllNotificationSettings,
+  getItemsForVendor,
+  getNotificationSettings,
+  saveNotificationSettings,
+  sendEmail,
+  verifyShopifyWebhook,
+} from "./order-notifications.js";
 
 dotenv.config();
 
@@ -12,6 +22,57 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
+
+// Shopify signs the exact raw request body, so this route must be registered
+// before the global JSON parser.
+app.post(
+  "/api/webhooks/shopify/orders-create",
+  express.raw({ type: "application/json", limit: "2mb" }),
+  async (req, res) => {
+    try {
+      const webhookSecret =
+        process.env.SHOPIFY_WEBHOOK_SECRET || process.env.SHOPIFY_CLIENT_SECRET;
+      if (!webhookSecret) {
+        return res.status(503).json({ error: "Webhook verification is not configured." });
+      }
+      if (!verifyShopifyWebhook(req.body, req.get("X-Shopify-Hmac-Sha256"), webhookSecret)) {
+        return res.status(401).json({ error: "Invalid webhook signature." });
+      }
+      if (req.get("X-Shopify-Topic") !== "orders/create") {
+        return res.status(200).json({ received: true, ignored: true });
+      }
+
+      const order = JSON.parse(req.body.toString("utf8"));
+      const settings = await getAllNotificationSettings(shopifyGraphQL);
+      const notifications = settings
+        .map((setting) => ({ setting, items: getItemsForVendor(order, setting.vendorName) }))
+        .filter(({ items }) => items.length > 0);
+
+      await Promise.all(
+        notifications.map(async ({ setting, items }) => {
+          const email = buildOrderEmail({
+            vendorName: setting.vendorName,
+            order,
+            items,
+            portalUrl: process.env.APP_URL,
+          });
+          await sendEmail({
+            apiKey: process.env.RESEND_API_KEY,
+            from: process.env.EMAIL_FROM,
+            to: setting.email,
+            ...email,
+          });
+        }),
+      );
+
+      res.status(200).json({ received: true, notifications: notifications.length });
+    } catch (error) {
+      console.error("Order notification webhook failed:", error);
+      res.status(502).json({ error: "Order notification delivery failed." });
+    }
+  },
+);
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -142,6 +203,28 @@ async function shopifyGraphQL(query, variables = {}) {
   }
 }
 
+function getAppUrl(req) {
+  const configuredUrl = process.env.APP_URL?.trim().replace(/\/+$/, "");
+  if (configuredUrl) return configuredUrl;
+
+  const host = req.get("x-forwarded-host") || req.get("host");
+  if (!host) return "";
+  const protocol = req.get("x-forwarded-proto") || req.protocol || "https";
+  return `${protocol}://${host}`;
+}
+
+async function getWebhookStatus(req) {
+  try {
+    const appUrl = getAppUrl(req);
+    return await ensureOrderWebhook(
+      shopifyGraphQL,
+      appUrl ? `${appUrl}/api/webhooks/shopify/orders-create` : "",
+    );
+  } catch (error) {
+    return { configured: false, error: error.message };
+  }
+}
+
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -173,7 +256,75 @@ app.post("/api/auth/login", (req, res) => {
   res.json({ success: true, token, vendorName: vendor.vendorName });
 });
 
-// 2. Fetch Brand Products & Catalog
+// 2. Order notification settings
+app.get("/api/settings/notifications", authenticateToken, async (req, res) => {
+  try {
+    const [settings, webhook] = await Promise.all([
+      getNotificationSettings(shopifyGraphQL, req.vendor),
+      getWebhookStatus(req),
+    ]);
+    res.json({
+      settings,
+      webhook,
+      emailDeliveryConfigured: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM),
+    });
+  } catch (error) {
+    res.status(502).json({ error: error.message });
+  }
+});
+
+app.put("/api/settings/notifications", authenticateToken, async (req, res) => {
+  try {
+    const settings = await saveNotificationSettings(shopifyGraphQL, req.vendor, req.body || {});
+    const webhook = await getWebhookStatus(req);
+    res.json({
+      success: true,
+      settings,
+      webhook,
+      emailDeliveryConfigured: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM),
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/settings/notifications/test", authenticateToken, async (req, res) => {
+  try {
+    const settings = await getNotificationSettings(shopifyGraphQL, req.vendor);
+    if (!settings.email) {
+      return res.status(400).json({ error: "Save a notification email address first." });
+    }
+
+    const order = {
+      id: "test",
+      name: "#TEST",
+      created_at: new Date().toISOString(),
+      currency: "USD",
+      customer: { first_name: "Test", last_name: "Customer", email: "customer@example.com" },
+      shipping_address: { address1: "123 Example Street", city: "Los Angeles", country: "United States" },
+    };
+    const items = [
+      { title: `${req.vendor} test product`, variant_title: "Notification preview", quantity: 1, price: 25 },
+    ];
+    const email = buildOrderEmail({
+      vendorName: req.vendor,
+      order,
+      items,
+      portalUrl: getAppUrl(req),
+    });
+    await sendEmail({
+      apiKey: process.env.RESEND_API_KEY,
+      from: process.env.EMAIL_FROM,
+      to: settings.email,
+      ...email,
+    });
+    res.json({ success: true, message: `Test email sent to ${settings.email}.` });
+  } catch (error) {
+    res.status(502).json({ error: error.message });
+  }
+});
+
+// 3. Fetch Brand Products & Catalog
 app.get("/api/products", authenticateToken, async (req, res) => {
   try {
     const activeVendor = req.vendor;

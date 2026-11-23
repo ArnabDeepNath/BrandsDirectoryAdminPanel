@@ -616,6 +616,71 @@
         transform: scale(0.99);
       }
 
+      /* Notification settings */
+      .settings-form {
+        max-width: 620px;
+      }
+      .settings-field {
+        margin: 22px 0;
+      }
+      .settings-toggle {
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        padding: 15px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #f8fafc;
+        cursor: pointer;
+      }
+      .settings-toggle input {
+        width: 18px;
+        height: 18px;
+        margin: 1px 0 0;
+        accent-color: var(--primary);
+      }
+      .settings-toggle strong {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+      .settings-toggle span {
+        color: #64748b;
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      .settings-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .settings-actions button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .settings-status {
+        margin-top: 18px;
+        padding: 12px 14px;
+        border-radius: 9px;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        color: #15803d;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .settings-status.error {
+        background: #fef2f2;
+        border-color: #fecaca;
+        color: var(--danger);
+      }
+      .settings-config {
+        margin-top: 12px;
+        color: #64748b;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
       /* Modal Popups */
       .modal-overlay {
         position: fixed;
@@ -864,6 +929,7 @@
             📦 Products & Catalog
           </button>
           <button onclick="switchTab('orders')">🛍️ Orders & Shipping</button>
+          <button onclick="switchTab('settings')">⚙️ Settings</button>
         </div>
         <button class="btn-logout" onclick="logout()">Log Out</button>
       </div>
@@ -988,6 +1054,46 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Tab 4: Notification Settings -->
+      <div id="settingsPanel" class="panel" style="display: none">
+        <h3 style="margin-top: 0; margin-bottom: 4px">Order Email Notifications</h3>
+        <p class="hint-text" style="margin-top: 8px">
+          Receive an email with the customer, shipping address, and your brand's
+          items whenever a new Shopify order arrives.
+        </p>
+        <form id="notificationSettingsForm" class="settings-form">
+          <div class="settings-field">
+            <label class="settings-toggle" for="notificationsEnabled">
+              <input type="checkbox" id="notificationsEnabled" checked />
+              <span>
+                <strong>Notify me about new orders</strong>
+                <span>Only orders containing products assigned to your brand will trigger an email.</span>
+              </span>
+            </label>
+          </div>
+          <div class="settings-field">
+            <label class="login-label" for="notificationEmail">Notification Email Address</label>
+            <input
+              type="email"
+              id="notificationEmail"
+              class="login-input"
+              autocomplete="email"
+              placeholder="orders@yourbrand.com"
+            />
+          </div>
+          <div class="settings-actions">
+            <button type="submit" id="saveNotificationsButton" class="btn-submit">
+              Save Notification Settings
+            </button>
+            <button type="button" id="testNotificationButton" class="btn-export" onclick="sendTestNotification()">
+              Send Test Email
+            </button>
+          </div>
+          <div id="notificationSettingsStatus" class="settings-status" style="display: none" role="status"></div>
+          <div id="notificationConfigStatus" class="settings-config">Checking notification connection...</div>
+        </form>
+      </div>
     </div>
 
     <!-- 3. DETAIL MODALS -->
@@ -1022,6 +1128,10 @@
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeModal();
       });
+
+      document
+        .getElementById("notificationSettingsForm")
+        .addEventListener("submit", saveNotificationSettings);
 
       document
         .getElementById("loginForm")
@@ -1072,6 +1182,7 @@
         document.getElementById("analyticsPanel").style.display = "none";
         document.getElementById("inventoryPanel").style.display = "none";
         document.getElementById("ordersPanel").style.display = "none";
+        document.getElementById("settingsPanel").style.display = "none";
 
         if (tab === "analytics") {
           tabs[0].classList.add("active");
@@ -1085,6 +1196,10 @@
           tabs[2].classList.add("active");
           document.getElementById("ordersPanel").style.display = "block";
           fetchOrders();
+        } else if (tab === "settings") {
+          tabs[3].classList.add("active");
+          document.getElementById("settingsPanel").style.display = "block";
+          fetchNotificationSettings();
         }
       }
 
@@ -1099,8 +1214,102 @@
       }
 
       async function loadAllData() {
-        await Promise.all([fetchInventory(), fetchOrders()]);
+        await Promise.all([fetchInventory(), fetchOrders(), fetchNotificationSettings()]);
         renderAnalytics();
+      }
+
+      function setNotificationStatus(message, isError = false) {
+        const status = document.getElementById("notificationSettingsStatus");
+        status.style.display = message ? "block" : "none";
+        status.className = `settings-status${isError ? " error" : ""}`;
+        status.textContent = message || "";
+      }
+
+      function renderNotificationConnection(data) {
+        const connection = document.getElementById("notificationConfigStatus");
+        if (!data.emailDeliveryConfigured) {
+          connection.textContent = "Email delivery is not configured yet. The site administrator must add RESEND_API_KEY and EMAIL_FROM.";
+        } else if (!data.webhook?.configured) {
+          connection.textContent = `Automatic order webhook is not connected${data.webhook?.error ? `: ${data.webhook.error}` : "."}`;
+        } else {
+          connection.textContent = "✓ Email delivery and automatic Shopify order notifications are connected.";
+        }
+      }
+
+      async function fetchNotificationSettings() {
+        const token = localStorage.getItem("vendor_jwt");
+        try {
+          const res = await fetch(`${API_BASE}/settings/notifications`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Unable to load notification settings.");
+
+          document.getElementById("notificationEmail").value = data.settings.email || "";
+          document.getElementById("notificationsEnabled").checked = Boolean(data.settings.enabled);
+          document.getElementById("testNotificationButton").disabled = !data.settings.email;
+          renderNotificationConnection(data);
+        } catch (error) {
+          setNotificationStatus(error.message, true);
+          document.getElementById("notificationConfigStatus").textContent = "Notification connection could not be verified.";
+        }
+      }
+
+      async function saveNotificationSettings(event) {
+        event.preventDefault();
+        const token = localStorage.getItem("vendor_jwt");
+        const saveButton = document.getElementById("saveNotificationsButton");
+        const email = document.getElementById("notificationEmail").value.trim();
+        const enabled = document.getElementById("notificationsEnabled").checked;
+        saveButton.disabled = true;
+        saveButton.textContent = "Saving...";
+        setNotificationStatus("");
+
+        try {
+          const res = await fetch(`${API_BASE}/settings/notifications`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ email, enabled }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Unable to save notification settings.");
+
+          document.getElementById("notificationEmail").value = data.settings.email || "";
+          document.getElementById("testNotificationButton").disabled = !data.settings.email;
+          setNotificationStatus("Notification settings saved.");
+          renderNotificationConnection(data);
+        } catch (error) {
+          setNotificationStatus(error.message, true);
+        } finally {
+          saveButton.disabled = false;
+          saveButton.textContent = "Save Notification Settings";
+        }
+      }
+
+      async function sendTestNotification() {
+        const token = localStorage.getItem("vendor_jwt");
+        const button = document.getElementById("testNotificationButton");
+        button.disabled = true;
+        button.textContent = "Sending...";
+        setNotificationStatus("");
+
+        try {
+          const res = await fetch(`${API_BASE}/settings/notifications/test`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Unable to send the test email.");
+          setNotificationStatus(data.message);
+        } catch (error) {
+          setNotificationStatus(error.message, true);
+        } finally {
+          button.disabled = !document.getElementById("notificationEmail").value;
+          button.textContent = "Send Test Email";
+        }
       }
 
       async function fetchInventory() {
