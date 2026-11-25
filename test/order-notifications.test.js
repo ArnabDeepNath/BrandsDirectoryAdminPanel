@@ -108,6 +108,20 @@ test("notification settings create their definition and persist JSON on the shop
   assert.equal(JSON.parse(calls[2].variables.metafields[0].value).email, "orders@rarebeauty.com");
 });
 
+test("mapped brands use their default recipient until settings are saved", async () => {
+  const graphQL = async () => ({ isError: false, data: { shop: { settings: null } } });
+  assert.deepEqual(await getNotificationSettings(graphQL, " rokael beauty "), {
+    vendorName: "Rokael Beauty",
+    email: "celeste@rokaelbeauty.com",
+    enabled: true,
+  });
+  assert.deepEqual(await getNotificationSettings(graphQL, "Unmapped Brand"), {
+    vendorName: "Unmapped Brand",
+    email: "",
+    enabled: false,
+  });
+});
+
 test("settings reads default to disabled and webhook reads ignore disabled recipients", async () => {
   const empty = await getNotificationSettings(
     async () => ({ isError: false, data: { shop: { settings: null } } }),
@@ -123,13 +137,18 @@ test("settings reads default to disabled and webhook reads ignore disabled recip
           nodes: [
             { key: settingsKey("Rare Beauty"), jsonValue: { vendorName: "Rare Beauty", email: "orders@rare.com", enabled: true } },
             { key: settingsKey("Fenty Beauty"), jsonValue: { vendorName: "Fenty Beauty", email: "orders@fenty.com", enabled: false } },
+            { key: settingsKey("Rokael Beauty"), jsonValue: { vendorName: "Rokael Beauty", email: "celeste@rokaelbeauty.com", enabled: false } },
             { key: "unrelated", jsonValue: { vendorName: "Other", email: "other@example.com", enabled: true } },
           ],
         },
       },
     },
   }));
-  assert.deepEqual(all.map((setting) => setting.vendorName), ["Rare Beauty"]);
+  assert.ok(all.some((setting) => setting.vendorName === "Rare Beauty"));
+  assert.ok(all.some((setting) => setting.vendorName === "Melt Cosmetics"));
+  assert.ok(!all.some((setting) => setting.vendorName === "Fenty Beauty"));
+  assert.ok(!all.some((setting) => setting.vendorName === "Rokael Beauty"));
+  assert.ok(!all.some((setting) => setting.vendorName === "Other"));
 });
 
 test("webhook setup creates, updates, and reuses the orders/create subscription", async () => {

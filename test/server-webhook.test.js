@@ -61,6 +61,7 @@ test("signed orders/create webhook emails each matching brand only its own items
     line_items: [
       { title: "Rare Lipstick", vendor: "Rare Beauty", quantity: 1, price: 20 },
       { title: "Fenty Gloss", vendor: "Fenty Beauty", quantity: 1, price: 18 },
+      { title: "Rokael Lashes", vendor: "Rokael Beauty", quantity: 1, price: 16 },
     ],
   });
   const signature = crypto.createHmac("sha256", secret).update(body).digest("base64");
@@ -88,16 +89,20 @@ test("signed orders/create webhook emails each matching brand only its own items
       body,
     });
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { received: true, notifications: 2 });
-    assert.equal(emailRequests.length, 2);
+    assert.deepEqual(await response.json(), { received: true, notifications: 3 });
+    assert.equal(emailRequests.length, 3);
     const rareEmail = emailRequests.find((email) => email.to[0] === "orders@rare.com");
     const fentyEmail = emailRequests.find((email) => email.to[0] === "orders@fenty.com");
+    const rokaelEmail = emailRequests.find((email) => email.to[0] === "celeste@rokaelbeauty.com");
     assert.ok(rareEmail);
     assert.ok(fentyEmail);
+    assert.ok(rokaelEmail);
     assert.match(rareEmail.html, /Rare Lipstick/);
     assert.doesNotMatch(rareEmail.html, /Fenty Gloss/);
     assert.match(fentyEmail.html, /Fenty Gloss/);
     assert.doesNotMatch(fentyEmail.html, /Rare Lipstick/);
+    assert.match(rokaelEmail.html, /Rokael Lashes/);
+    assert.doesNotMatch(rokaelEmail.html, /Rare Lipstick/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     globalThis.fetch = originalFetch;

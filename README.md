@@ -6,6 +6,8 @@ Express and vanilla-JS brand portal for Shopify products, orders, fulfillment, a
 
 Each brand can open **Settings** in the portal, enter its notification email, and enable or disable new-order emails. Settings are stored as shop metafields in Shopify, so no separate database is required and Vercel deployments do not erase them.
 
+`brand-notification-emails.js` contains the default recipient map for the 26 configured brands, including AORA MEXICO (`nour@aoramakeup.com`). These defaults are enabled automatically. A brand's saved Shopify settings take precedence, including when notifications are disabled.
+
 When a Shopify `orders/create` webhook arrives, the server:
 
 1. Verifies Shopify's HMAC signature using the app client secret.

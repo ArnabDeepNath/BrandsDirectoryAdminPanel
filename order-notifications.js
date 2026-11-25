@@ -1,4 +1,8 @@
 import crypto from "crypto";
+import {
+  DEFAULT_NOTIFICATION_RECIPIENTS,
+  getDefaultNotificationRecipient,
+} from "./brand-notification-emails.js";
 
 export const SETTINGS_NAMESPACE = "vendor_portal";
 const SETTINGS_KEY_PREFIX = "order_notification_";
@@ -63,7 +67,20 @@ export async function getNotificationSettings(shopifyGraphQL, vendorName) {
   );
 
   if (result.isError) throw graphQLError(result);
-  return parseSettings(result.data?.shop?.settings?.jsonValue, vendorName);
+
+  const savedSettings = result.data?.shop?.settings?.jsonValue;
+  if (!savedSettings) {
+    const defaultRecipient = getDefaultNotificationRecipient(vendorName);
+    if (defaultRecipient) {
+      return {
+        vendorName: defaultRecipient.vendorName,
+        email: defaultRecipient.email,
+        enabled: true,
+      };
+    }
+  }
+
+  return parseSettings(savedSettings, vendorName);
 }
 
 export async function getAllNotificationSettings(shopifyGraphQL) {
@@ -83,10 +100,20 @@ export async function getAllNotificationSettings(shopifyGraphQL) {
 
   if (result.isError) throw graphQLError(result);
 
-  return (result.data?.shop?.metafields?.nodes || [])
+  const savedSettings = (result.data?.shop?.metafields?.nodes || [])
     .filter((field) => field.key?.startsWith(SETTINGS_KEY_PREFIX))
     .map((field) => parseSettings(field.jsonValue, ""))
-    .filter((settings) => settings.vendorName && settings.enabled && isValidEmail(settings.email));
+    .filter((settings) => settings.vendorName);
+  const overriddenVendors = new Set(
+    savedSettings.map((settings) => settings.vendorName.trim().toLowerCase()),
+  );
+  const defaultSettings = DEFAULT_NOTIFICATION_RECIPIENTS.filter(
+    ({ vendorName }) => !overriddenVendors.has(vendorName.trim().toLowerCase()),
+  ).map(({ vendorName, email }) => ({ vendorName, email, enabled: true }));
+
+  return [...savedSettings, ...defaultSettings].filter(
+    (settings) => settings.enabled && isValidEmail(settings.email),
+  );
 }
 
 async function ensureSettingsDefinition(shopifyGraphQL, vendorName) {
