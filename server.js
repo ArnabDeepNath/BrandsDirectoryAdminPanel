@@ -10,6 +10,7 @@ import {
   getAllNotificationSettings,
   getItemsForVendor,
   getNotificationSettings,
+  getOrderForNotification,
   saveNotificationSettings,
   sendEmail,
   verifyShopifyWebhook,
@@ -295,17 +296,28 @@ app.post("/api/settings/notifications/test", authenticateToken, async (req, res)
       return res.status(400).json({ error: "Save a notification email address first." });
     }
 
-    const order = {
-      id: "test",
-      name: "#TEST",
-      created_at: new Date().toISOString(),
-      currency: "USD",
-      customer: { first_name: "Test", last_name: "Customer", email: "customer@example.com" },
-      shipping_address: { address1: "123 Example Street", city: "Los Angeles", country: "United States" },
-    };
-    const items = [
-      { title: `${req.vendor} test product`, variant_title: "Notification preview", quantity: 1, price: 25 },
-    ];
+    const requestedOrderName = String(req.body?.orderName || "").trim();
+    let order;
+    let items;
+    if (requestedOrderName) {
+      ({ order, items } = await getOrderForNotification(
+        shopifyGraphQL,
+        req.vendor,
+        requestedOrderName,
+      ));
+    } else {
+      order = {
+        id: "test",
+        name: "#TEST",
+        created_at: new Date().toISOString(),
+        currency: "USD",
+        customer: { first_name: "Test", last_name: "Customer", email: "customer@example.com" },
+        shipping_address: { address1: "123 Example Street", city: "Los Angeles", country: "United States" },
+      };
+      items = [
+        { title: `${req.vendor} test product`, variant_title: "Notification preview", quantity: 1, price: 25 },
+      ];
+    }
     const email = buildOrderEmail({
       vendorName: req.vendor,
       order,
@@ -318,7 +330,11 @@ app.post("/api/settings/notifications/test", authenticateToken, async (req, res)
       to: settings.email,
       ...email,
     });
-    res.json({ success: true, message: `Test email sent to ${settings.email}.` });
+    res.json({
+      success: true,
+      orderName: order.name,
+      message: `${requestedOrderName ? "Order" : "Test"} email sent to ${settings.email}.`,
+    });
   } catch (error) {
     res.status(502).json({ error: error.message });
   }

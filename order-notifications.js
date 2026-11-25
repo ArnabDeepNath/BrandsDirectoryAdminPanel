@@ -251,6 +251,99 @@ export function getItemsForVendor(order, vendorName) {
   );
 }
 
+export async function getOrderForNotification(shopifyGraphQL, vendorName, orderName) {
+  const normalizedOrderName = String(orderName || "").trim();
+  if (!/^#\d+$/.test(normalizedOrderName)) {
+    throw new Error("Enter a valid order number, for example #1093.");
+  }
+
+  const result = await shopifyGraphQL(
+    `query getOrderForNotification($queryString: String!) {
+      orders(first: 5, query: $queryString) {
+        nodes {
+          id
+          name
+          createdAt
+          currencyCode
+          customer {
+            firstName
+            lastName
+            defaultEmailAddress {
+              emailAddress
+            }
+          }
+          shippingAddress {
+            name
+            address1
+            address2
+            city
+            province
+            zip
+            country
+          }
+          lineItems(first: 100) {
+            nodes {
+              title
+              variantTitle
+              sku
+              vendor
+              quantity
+              originalUnitPriceSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
+            }
+          }
+        }
+      }
+    }`,
+    { queryString: `name:${normalizedOrderName}` },
+  );
+
+  if (result.isError) throw graphQLError(result);
+  const foundOrder = (result.data?.orders?.nodes || []).find(
+    (order) => order.name === normalizedOrderName,
+  );
+  if (!foundOrder) throw new Error(`Order ${normalizedOrderName} was not found.`);
+
+  const lineItems = (foundOrder.lineItems?.nodes || []).map((item) => ({
+    title: item.title,
+    variant_title: item.variantTitle,
+    sku: item.sku,
+    vendor: item.vendor,
+    quantity: item.quantity,
+    price: item.originalUnitPriceSet?.shopMoney?.amount || 0,
+    price_set: {
+      shop_money: {
+        currency_code:
+          item.originalUnitPriceSet?.shopMoney?.currencyCode || foundOrder.currencyCode,
+      },
+    },
+  }));
+  const items = getItemsForVendor({ line_items: lineItems }, vendorName);
+  if (!items.length) {
+    throw new Error(`Order ${normalizedOrderName} does not contain items for ${vendorName}.`);
+  }
+
+  return {
+    order: {
+      id: foundOrder.id,
+      name: foundOrder.name,
+      created_at: foundOrder.createdAt,
+      currency: foundOrder.currencyCode,
+      customer: {
+        first_name: foundOrder.customer?.firstName,
+        last_name: foundOrder.customer?.lastName,
+        email: foundOrder.customer?.defaultEmailAddress?.emailAddress,
+      },
+      shipping_address: foundOrder.shippingAddress,
+    },
+    items,
+  };
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "\u0026amp;")

@@ -31,6 +31,8 @@ Copy `.env.example` into your environment configuration and set the existing Sho
 
 The Shopify app needs its existing order/product access and permission to manage its webhook subscriptions and shop metafields. After deploying, open **Settings** once to confirm that email delivery and the automatic webhook both show as connected. Save a recipient and use **Send Test Email** to verify delivery.
 
+To resend a real order to the authenticated brand's saved recipient, post `{"orderName":"#1093"}` to `/api/settings/notifications/test`. The endpoint includes only that brand's line items; omitting `orderName` sends the generic `#TEST` preview.
+
 ## Run locally
 
 ```sh

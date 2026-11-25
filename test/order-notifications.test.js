@@ -7,6 +7,7 @@ import {
   getAllNotificationSettings,
   getItemsForVendor,
   getNotificationSettings,
+  getOrderForNotification,
   saveNotificationSettings,
   sendEmail,
   settingsKey,
@@ -40,6 +41,66 @@ test("only line items belonging to the brand are selected", () => {
   assert.deepEqual(
     getItemsForVendor(order, "Rare Beauty").map((item) => item.title),
     ["Lipstick", "Blush"],
+  );
+});
+
+test("real-order notification lookup returns only the authenticated brand's items", async () => {
+  let variables;
+  const graphQL = async (query, input) => {
+    variables = input;
+    return {
+      isError: false,
+      data: {
+        orders: {
+          nodes: [
+            {
+              id: "gid://shopify/Order/1093",
+              name: "#1093",
+              createdAt: "2026-11-14T16:05:06Z",
+              currencyCode: "USD",
+              customer: { firstName: "Test", lastName: "Customer", defaultEmailAddress: { emailAddress: "customer@example.com" } },
+              shippingAddress: { address1: "123 Example Street", country: "United States" },
+              lineItems: {
+                nodes: [
+                  {
+                    title: "Inicia",
+                    variantTitle: "Default Title",
+                    sku: "AORA-1",
+                    vendor: "AORA MEXICO",
+                    quantity: 1,
+                    originalUnitPriceSet: { shopMoney: { amount: "32.00", currencyCode: "USD" } },
+                  },
+                  {
+                    title: "Other brand item",
+                    vendor: "Other Brand",
+                    quantity: 1,
+                    originalUnitPriceSet: { shopMoney: { amount: "10.00", currencyCode: "USD" } },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    };
+  };
+
+  const { order, items } = await getOrderForNotification(graphQL, "AORA MEXICO", " #1093 ");
+  assert.deepEqual(variables, { queryString: "name:#1093" });
+  assert.equal(order.name, "#1093");
+  assert.equal(order.created_at, "2026-11-14T16:05:06Z");
+  assert.equal(items.length, 1);
+  assert.equal(items[0].title, "Inicia");
+  assert.equal(items[0].price, "32.00");
+  assert.equal(items[0].price_set.shop_money.currency_code, "USD");
+
+  await assert.rejects(
+    getOrderForNotification(graphQL, "AORA MEXICO", "invalid"),
+    /valid order number/,
+  );
+  await assert.rejects(
+    getOrderForNotification(graphQL, "Different Brand", "#1093"),
+    /does not contain items/,
   );
 });
 
